@@ -80,6 +80,12 @@ void	_Cdecl	HelpScreen	(void);
 /* Returns the key that was pressed.			*/
 int	_Cdecl	PopupBox	(char *message,char *keys);
 
+/* Prompt the user for a string on the screen.  Returns */
+/* non-zero if OK, or zero if ESC was pressed.  The     */
+/* previous contents of the buffer may be edited.  The	*/
+/* buffer must be 'len' + 1 bytes in length at least.	*/
+int	_Cdecl	PromptUser	(char *prompt,char *buf,int len);
+
 #ifdef	__cplusplus
 }
 #endif

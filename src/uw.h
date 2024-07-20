@@ -26,6 +26,7 @@
    -------  --------  --  --------------------------------------
      1.0    15/12/90  RW  Original Version of UW.H
      1.1    01/01/91  RW  Clean up code and remove __PROTO__
+     1.2    26/01/91  RW  Add support for file transfers.
 
 -------------------------------------------------------------------------*/
 
@@ -47,9 +48,11 @@ extern	"C" {
 
 /* Define the structure of a window process descriptor, */
 /* defining the process to be run within a window.	*/
-typedef	struct	{
+typedef	struct rec_UWProcess
+		{
 		  int used;		/* Non-zero if in use */
 		  int terminal;		/* Non-zero for terminal windows */
+		  struct rec_UWProcess *transfer; /* For file transfers */
 
 		  /* Initialise the window handling for the window */
 		  void	_Cdecl	(*init) (int window,uwtype_t emul);

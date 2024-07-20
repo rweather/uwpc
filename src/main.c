@@ -34,6 +34,7 @@
 #include "uw.h"			/* The Unix Windows protocol */
 #include "term.h"		/* Terminal handling routines */
 #include "config.h"		/* Configure the program */
+#include "ascii.h"		/* ASCII file transfers */
 #include <stdio.h>		/* Standard I/O routines */
 
 #ifdef	__TURBOC__
@@ -49,15 +50,22 @@ void	_Cdecl	OutputString	(char *str);
 /* directory is tried first, and then the program directory.	*/
 char	_Cdecl	*ConfigFile="UW.CFG";
 
+/* Define the default upload and download file names */
+#define	FILE_NAME_SIZE	64
+static	char	_Cdecl	UploadFile[FILE_NAME_SIZE + 1];
+static	char	_Cdecl	DownloadFile[FILE_NAME_SIZE + 1];
+
 /* Main program entry point */
 int	_Cdecl	main (int argc,char *argv[])
 {
   Configure (argv[0]);		/* Configure the program */
+  UploadFile[0] = '\0';
+  DownloadFile[0] = '\0';
   if (!InitComDevice ())
     AbortProgram ("Cannot initialise COM port");
   InitUWProtocol (Def0TermType);
   InitKeyboard ();
-  OutputString ("UW/PC version 1.01, Copyright (C) 1990-1991 Rhys Weatherley\r\n");
+  OutputString ("UW/PC version 1.02, Copyright (C) 1990-1991 Rhys Weatherley\r\n");
   OutputString ("UW/PC comes with ABSOLUTELY NO WARRANTY; see the file COPYING for details.\r\n");
   OutputString ("This is free software, and you are welcome to redistribute it\r\n");
   OutputString ("under certain conditions; see the file COPYING for details.\r\n\r\n");
@@ -88,7 +96,7 @@ static	void	_Cdecl	HandleTerminal (void)
       key = GetKeyPress ();	/* Get the user's keypress and decode */
       if (XonXoffDirect && (key == 021 || key == 023))
 	WriteComDevice (key);	/* Send XON and XOFF direct if nec */
-       else if (key >= 0 && key <= 255)
+       else if (key >= 0 && key <= 255 && key != '\033')
 	UWProcessChar (key);	/* Process the normal ASCII character */
        else
 	{
@@ -147,6 +155,30 @@ static	void	_Cdecl	HandleTerminal (void)
 			       } /* if */
 			     break;
 	      case DIAL_KEY: DialModem (); break;
+	      case UPLOAD_KEY:		/* Perform a file upload */
+	      case CURSOR_PGUP:
+/*	      		     key = PopupBox ("Upload: [X]modem or [A]scii ?",
+			     		     "XxAa\033");
+			     if (key != 'a' && key != 'A')
+			       break;				*/
+			     if (!PromptUser ("Enter file to upload, ^X to"
+			     		      " clear line, or ESC to abort.",
+					      UploadFile,FILE_NAME_SIZE))
+			       break;		/* User pressed ESC */
+			     AsciiSend (UWCurrWindow,UploadFile);
+	      		     break;
+	      case DOWNLOAD_KEY:	/* Perform a file download */
+	      case CURSOR_PGDN:
+/*	      		     key = PopupBox ("Download: [X]modem or [A]scii ?",
+			     		     "XxAa\033");
+			     if (key != 'a' && key != 'A')
+			       break;				*/
+			     if (!PromptUser ("Enter file to download, ^X to"
+			     		      " clear line, or ESC to abort.",
+					      DownloadFile,FILE_NAME_SIZE))
+			       break;		/* User pressed ESC */
+			     AsciiReceive (UWCurrWindow,DownloadFile,0);
+	      		     break;
 	      default:	     if (key >= ALT_WIND_NUM(1) &&
 				 key <= ALT_WIND_NUM(7))
 			       UWTopWindow (ALT_GET_NUM(key));
@@ -160,8 +192,11 @@ static	void	_Cdecl	HandleTerminal (void)
 				  else
 				   UWSendKey (key); /* Send through terminal */
 			       } /* then */
-			      else
+			      else if (key != '\033' ||
+			      	 UWProcList[UWCurrWindow].transfer != NULL)
 			       UWSendKey (key); /* Send a special key */
+			      else if (key == '\033')
+			       UWProcessChar (key); /* Process ESC normally */
 			     break;
 	    } /* switch */
 	} /* if */

@@ -33,6 +33,7 @@
 #include "uwproto.h"		/* Unix Windows protocol declarations */
 #include "device.h"		/* Communications device handling */
 #include "term.h"		/* Terminal handling routines */
+#include <stddef.h>		/* NULL is defined here */
 
 #ifdef	__TURBOC__
 #pragma	warn -par		/* Turn off annoying warnings */
@@ -98,8 +99,9 @@ static	void	_Cdecl	UWToServer (int window,int ch)
 /* Do a process tick for a terminal window */
 static	void	_Cdecl	TermTick (int window)
 {
-  /* Ordinary terminal windows do not need   */
-  /* "tick" handlers, so ignore the request. */
+  /* If there is a file transfer in progress, call it's tick function */
+  if (UWProcList[window].transfer != NULL)
+    (*(UWProcList[window].transfer -> tick)) (window);
 } /* TermTick */
 
 /* Initialise the UW protocol handling routines */
@@ -116,6 +118,7 @@ void	_Cdecl	InitUWProtocol (uwtype_t emul)
     UWProcList[wind].used = 0;	/* Mark windows 1-7 as unused */
   UWProcList[0].used = 1;	/* Setup the Protocol 0 window */
   UWProcList[0].terminal = 1;
+  UWProcList[0].transfer = NULL; /* No file transfer is currently in process */
   UWProcList[0].init = TermInit;
   UWProcList[0].output = TermOutput;
   UWProcList[0].tick = TermTick;
@@ -135,6 +138,8 @@ void	_Cdecl	TermUWProtocol (void)
 /* it to the host for the current window if necessary.   */
 void	_Cdecl	UWProcessChar (int ch)
 {
+  if (UWProcList[UWCurrWindow].transfer != NULL)
+    return;		/* Ignore key if a file transfer is in progress */
   UWProcWindow (UWCurrWindow,ch); /* Send to the current window */
 } /* UWProcessChar */
 
@@ -143,8 +148,8 @@ void	_Cdecl	UWProcWindow (int window,int ch)
 {
   if (!UWProcList[window].used)
     return;			/* Abort if window is unused */
-  if (!UWProcList[window].terminal)
-    return;			/* Not a terminal window - ignore */
+  if (!UWProcList[window].terminal && UWProcList[window].transfer == NULL)
+    return;			/* Not a terminal/transfer window - ignore */
    else
     UWToServer (window,ch);	/* Send character to the server */
 } /* UWProcWindow */
@@ -194,6 +199,7 @@ int	_Cdecl	UWCreateWindow (void _Cdecl (*init) (int window,uwtype_t emul),
   if ((wind = NewWindow ()) < 0)
     return (-1);		/* No more windows available */
   UWProcList[wind].terminal = terminal; /* Setup the window parameters */
+  UWProcList[wind].transfer = NULL; /* No file transfer in progress */
   UWProcList[wind].init = init;
   UWProcList[wind].output = output;
   UWProcList[wind].tick = tick;
@@ -279,7 +285,8 @@ void	_Cdecl	UWTick (void)
   /* Get any input characters and process the UW protocol */
   if ((ch = ReadComDevice ()) < 0)
     return;			/* No input characters ready */
-  ch &= 0x7F;			/* Strip high bit from character */
+  if (UWProtocol > 0)
+    ch &= 0x7F;			/* Strip high bit in protocol 1 */
   if (ch == P1_IAC && !GotIAC)
     GotIAC = 1;			/* Record that IAC was received */
    else if (GotIAC)
@@ -296,6 +303,7 @@ void	_Cdecl	UWTick (void)
 		  break;	/* Cannot create in protocol 0 */
 		UWProcList[arg].used = 1; /* Setup window parameters */
 		UWProcList[arg].terminal = 1;
+		UWProcList[arg].transfer = NULL;
 		UWProcList[arg].init = TermInit;
 		UWProcList[arg].output = TermOutput;
 		UWProcList[arg].tick = TermTick;

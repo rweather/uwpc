@@ -1,0 +1,6 @@
+			History of UW/PC Versions
+			=========================
+
+1.00	Initial version to demonstrate feasibility - Not released.
+1.01	Bug fixes and clean up phase - Not released.
+1.02	ASCII file transfers added - First public release.

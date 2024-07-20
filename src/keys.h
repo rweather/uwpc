@@ -58,11 +58,18 @@ extern	"C" {
 #define JUMP_DOS_KEY		0x2400	/* ALT-J */
 #define INIT_KEY		0x1700	/* ALT-I */
 #define START_KEY		0x1600	/* ALT-U */
+#define UPLOAD_KEY		0x1F00	/* ALT-S */
+#define DOWNLOAD_KEY		0x1300	/* ALT-R */
 #define CURSOR_UP		0x4800
 #define CURSOR_DOWN		0x5000
 #define CURSOR_LEFT		0x4B00
 #define CURSOR_RIGHT		0x4D00
 #define CURSOR_HOME		0x4700
+#define CURSOR_END		0x4F00
+#define CURSOR_PGUP		0x4900
+#define CURSOR_PGDN		0x5100
+#define CURSOR_INS		0x5200
+#define CURSOR_DEL		0x7F	/* This module translates this key */
 #define DIAL_KEY		0x2000	/* ALT-D */
 
 /* Define the strings for the 10 function keys */

@@ -38,6 +38,7 @@
 #include <dos.h>		/* Low-level hardware/DOS routines */
 #include <string.h>		/* String handling routines */
 #include <mem.h>		/* Memory handling routines */
+#include <stddef.h>		/* NULL is defined here */
 
 /* Define the configurable terminal types to use for windows */
 uwtype_t _Cdecl	DefTermType=UWT_ADM31;
@@ -81,14 +82,16 @@ static	char	*_Cdecl	HelpData[] =
 	  "ALT-K - Kill current window",
 	  "ALT-N - Create a new window",
 	  "ALT-Q - Quit the program",
+	  "ALT-R - Download (receive) a file",
+	  "ALT-S - Upload (send) a file",
 	  "ALT-U - Send \"uw^M\" to host",
 	  "ALT-X - Exit the program",
 	  "ALT-Z - This help information",
 	  "ALT-n - Go to window \"n\" (1-7)",
 	  " [Press any key to continue]"
 	 };
-#define HELP_LINES	14
-#define HELP_COLUMNS	31
+#define HELP_LINES	16
+#define HELP_COLUMNS	33
 
 /* Define strings for the terminal types (padded to 5 chars) */
 static	char	*_Cdecl	TermTypes[] = {"ADM31","VT52 ","ANSI ",
@@ -103,7 +106,10 @@ static	void	_Cdecl	StatusLine (void)
   window (1,25,80,25);
   gotoxy (1,1);
   textattr (StatusAttr);
-  cprintf (" ALT-Z for help \263 %s \263 %s \263 %s \263 Windows:",
+  cprintf (" %s \263 %s \263 %s \263 %s \263 Windows:",
+  	   (UWProcList[UWCurrWindow].transfer == NULL ?
+	       "ALT-Z for help" :
+	       "ESC to abort  "),
 	   TermTypes[Screens[CurrScreen].emul],
 	   DeviceParameters,(UWProtocol > 0 ? "UW" : "  "));
   for (wind = 1;wind < NUM_UW_WINDOWS;++wind)
@@ -718,6 +724,13 @@ static	void	_Cdecl	ADM31TermOutput (int window,int ch)
 /* Output a character to a terminal window */
 void	_Cdecl	TermOutput (int window,int ch)
 {
+  if (UWProcList[window].transfer != NULL)
+    {
+      /* Send the character to the file transfer that is in progress */
+      (*(UWProcList[window].transfer -> output)) (window,ch);
+      if (!UWProcList[window].terminal)
+        return;		/* Exit if terminal echo not wanted */
+    } /* if */
   switch (Screens[window].emul)
     {
       case UWT_ADM31:	ADM31TermOutput (window,ch); break;
@@ -731,6 +744,11 @@ void	_Cdecl	TermOutput (int window,int ch)
 /* If 'window' == 0, clean everything up.      */
 void	_Cdecl	TermKill (int wind)
 {
+  /* If a file transfer is in progress, then abort it */
+  if (UWProcList[wind].transfer != NULL)
+    (*(UWProcList[wind].transfer -> kill)) (wind);
+
+  /* Now clean up the screen processing of the window */
   if (wind)
     StatusLine ();	/* Redraw the status line - one less window */
    else
@@ -771,6 +789,12 @@ static	void	_Cdecl	SendKeys (int window,char *str)
 /* Calls UWProcWindow to send keycodes as necessary.   */
 void	_Cdecl	TermKey (int window,int key)
 {
+  if (UWProcList[window].transfer != NULL)
+    {
+      /* Send the key to the file transfer in progress to allow abort, etc */
+      (*(UWProcList[window].transfer -> key)) (window,key);
+      return;
+    } /* if */
   switch (Screens[window].emul)
     {
       case UWT_ADM31:
@@ -864,7 +888,7 @@ static	void	_Cdecl	DrawBox (int width,int height)
   int x1,y1,x2,y2,temp;
   x1 = 39 - (width / 2);
   x2 = x1 + width + 1;
-  y1 = 11 - (height / 2);
+  y1 = 12 - (height / 2);
   y2 = y1 + height + 1;
   gettext (x1,y1,x2,y2,SavedScreen);
   window (x1,y1,x2,y2);
@@ -898,7 +922,7 @@ static	void	_Cdecl	EraseBox (int width,int height)
   int x1,y1,x2,y2;
   x1 = 39 - (width / 2);
   x2 = x1 + width + 1;
-  y1 = 11 - (height / 2);
+  y1 = 12 - (height / 2);
   y2 = y1 + height + 1;
   puttext (x1,y1,x2,y2,SavedScreen);
 } /* EraseBox */
@@ -956,3 +980,104 @@ int	_Cdecl	PopupBox (char *message,char *keys)
   CursorOn ();
   return (key);
 } /* PopupBox */
+
+/* Prompt the user for a string on the screen.  Returns */
+/* non-zero if OK, or zero if ESC was pressed.  The     */
+/* previous contents of the buffer may be edited.  The	*/
+/* buffer must be 'len' + 1 bytes in length at least.	*/
+int	_Cdecl	PromptUser (char *prompt,char *buf,int len)
+{
+  int retval,x,y,key,posn,length,insert,temp,temp2;
+  struct text_info ti;
+  x = wherex ();
+  y = wherey ();
+  gettextinfo (&ti);
+  DrawBox (len + 4,4);
+  textattr (NormalAttr);
+  gotoxy (2,2);
+  cprintf ("%s",prompt);		/* Print prompt for user */
+  gotoxy (2,3);
+  cprintf ("\020 %s",buf);		/* Print current buffer contents */
+  length = strlen (buf);		/* Save the length of the buffer */
+  posn = 0;
+  retval = -1;
+  insert = 1;				/* Start in insert mode */
+  while (retval < 0)			/* Loop until CR or ESC pressed */
+    {
+      gotoxy (4 + posn,3);
+      while ((key = GetKeyPress ()) < 0)
+        ;				/* Loop until a key received */
+      switch (key)
+        {
+	  case CURSOR_INS:	insert = !insert; break;
+	  case CURSOR_LEFT:	if (posn > 0)		/* Move cursor left */
+	  			  --posn;
+				break;
+	  case CURSOR_RIGHT:	if (posn < length)	/* Move cursor right */
+	  			  ++posn;
+				break;
+	  case '\b':		if (posn <= 0)		/* Delete last char */
+	  			  break;		/* Don't move back */
+				--posn;
+				/* Fall through to delete char code */
+	  case CURSOR_DEL:	temp = posn;		/* Move chars back 1 */
+	  			if (!buf[temp])
+				  break;		/* Can't delete here */
+	  			while (buf[temp])
+				  {
+				    buf[temp] = buf[temp + 1];
+				    ++temp;
+				  } /* while */
+				gotoxy (4 + posn,3);
+				cprintf ("%s ",buf + posn);
+				--length;		/* Decrease length */
+				break;
+	  case CURSOR_HOME:	posn = 0; break;
+	  case CURSOR_END:	posn = length; break;
+	  case '\r':		retval = 1; break;	/* Exit with line */
+	  case '\033':		retval = 0; break;	/* Exit - no line */
+	  case ('X' & 0x1F):	posn = 0;		/* Clear whole line */
+	  			length = 0;
+				buf[0] = '\0';
+				gotoxy (4,3);
+				clreol ();
+				break;
+	  default:		if (key >= 32 && key <= 255)
+	  			  {
+				    if (insert)
+				      {
+				        /* Insert the character at this posn */
+				        if (length >= len)
+				          break;	/* Too many chars */
+					temp = posn;
+					while (temp < length)
+					  {
+					    /* Swap insert and this char */
+					    temp2 = buf[temp];
+					    buf[temp++] = key;
+					    key = temp2;
+					  } /* while */
+					buf[temp++] = key;
+					buf[temp] = '\0';
+					++length;
+					cprintf ("%s",buf + posn++);
+				      } /* then */
+				     else
+				      {
+				        if (posn >= len)
+					  break;	/* No more space */
+					buf[posn++] = key;
+					putch (key);
+					if (posn > length)
+					  buf[++length] = '\0';
+				      } /* else */
+				  } /* if */
+				break;
+	} /* switch */
+    } /* while */
+  EraseBox (len + 4,4);
+  window (1,1,80,24);
+  textattr (ti.attribute);
+  gotoxy (x,y);
+  return (retval);
+} /* PromptUser */
