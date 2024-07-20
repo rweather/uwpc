@@ -26,6 +26,7 @@
    -------  --------  --  --------------------------------------
      1.0    15/12/90  RW  Original Version of TERM.C
      1.1    01/01/91  RW  Clean up and remove __PROTO__
+     1.2    17/03/91  RW  Fix up COM device after a DOS shell-out.
 
 -------------------------------------------------------------------------*/
 
@@ -873,6 +874,7 @@ void	_Cdecl	JumpToDOS (void)
   clrscr ();
   cprintf ("Type EXIT at the DOS prompt to return to UW/PC.\r\n");
   system ("");
+  FixComDevice ();
   textmode (scrnmode);
   CursorOff ();
   puttext (1,1,80,25,SavedScreen);

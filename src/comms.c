@@ -29,6 +29,7 @@
       			   support for 57600 baud and automatic raising of
 			   the DTR signal.
       1.2    17/11/90  RW  Add 'leavedtr' parameter to "comrestore".
+      1.3    17/03/91  RW  Create 'comfix' to fix DOS shell-out bug.
 
 -----------------------------------------------------------------------------*/
 
@@ -551,5 +552,31 @@ int	port,value;
 		(value ? inportb (Com2Buf.dataport + COM_LCR) | 0x40
 		       : inportb (Com2Buf.dataport + COM_LCR) & 0xBF));
       default: break;
+    }
+}
+
+/* Restore a COM port after a DOS shell-out, since */
+/* a program may have disabled interrupts, etc.    */
+void	_Cdecl	comfix (port)
+int	port;
+{
+  int ch;
+  switch (port)
+    {
+      case 1:	/* Restore the serial port interrupts for COM1 */
+		outportb(Com1Buf.dataport + COM_IER,1);
+		outportb(Com1Buf.dataport + COM_MCR,0x0B);
+		ch = inportb(PIC_MASK);	/* Read current mask */
+		ch &= (0xFF^INT_MASK_1);/* Reset mask for COM1 */
+		outportb(PIC_MASK,ch);	/* Send it to the 8259A */
+		break;
+      case 2:	/* Restore the serial port interrupts for COM2 */
+		outportb(Com2Buf.dataport + COM_IER,1);
+		outportb(Com2Buf.dataport + COM_MCR,0x0B);
+		ch = inportb(PIC_MASK);	/* Read current mask */
+		ch &= (0xFF^INT_MASK_2);/* Reset mask for COM2 */
+		outportb(PIC_MASK,ch);	/* Send it to the 8259A */
+		break;
+      default:	break;
     }
 }

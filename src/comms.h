@@ -29,6 +29,7 @@
       			   support for 57600 baud and automatic raising of
 			   the DTR signal.
       1.2    17/11/90  RW  Add 'leavedtr' parameter to "comrestore".
+      1.3    17/03/91  RW  Create 'comfix' to fix DOS shell-out bug.
 
 -----------------------------------------------------------------------------*/
 
@@ -128,6 +129,10 @@ void	_Cdecl	comraisedtr (int port);
 
 /* Set the BREAK pulse on a COM port to 0 or 1 */
 void	_Cdecl	combreak (int port,int value);
+
+/* Restore a COM port after a DOS shell-out, since */
+/* a program may have disabled interrupts, etc.    */
+void	_Cdecl	comfix (int port);
 
 #ifdef	__cplusplus
 }

@@ -65,7 +65,7 @@ int	_Cdecl	main (int argc,char *argv[])
     AbortProgram ("Cannot initialise COM port");
   InitUWProtocol (Def0TermType);
   InitKeyboard ();
-  OutputString ("UW/PC version 1.02, Copyright (C) 1990-1991 Rhys Weatherley\r\n");
+  OutputString ("UW/PC version 1.03, Copyright (C) 1990-1991 Rhys Weatherley\r\n");
   OutputString ("UW/PC comes with ABSOLUTELY NO WARRANTY; see the file COPYING for details.\r\n");
   OutputString ("This is free software, and you are welcome to redistribute it\r\n");
   OutputString ("under certain conditions; see the file COPYING for details.\r\n\r\n");

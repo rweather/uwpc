@@ -27,6 +27,7 @@
      1.0    14/12/90  RW  Original Version of DEVICE.H
      1.1    01/01/91  RW  Clean up and remove __PROTO__
      1.2    26/01/91  RW  Add "uw" configuration handling.
+     1.3    17/03/91  RW  Add "FixComDevice" for serial port fixups.
 
 -------------------------------------------------------------------------*/
 
@@ -75,6 +76,9 @@ int	_Cdecl	ReadComDevice	(void);
 
 /* Write a character to the communications device */
 void	_Cdecl	WriteComDevice	(int ch);
+
+/* Fix a communications device after a DOS shell-out */
+void	_Cdecl	FixComDevice	(void);
 
 /* Test to see if the connection to the remote device exists. */
 int	_Cdecl	TestConnection	(void);

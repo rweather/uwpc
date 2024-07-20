@@ -26,6 +26,7 @@
    -------  --------  --  --------------------------------------
      1.0    14/12/90  RW  Original Version of DEVICE.C
      1.1    26/01/91  RW  Add "uw" configuration handling.
+     1.2    17/03/91  RW  Add "FixComDevice" for serial port fixups.
 
 -------------------------------------------------------------------------*/
 
@@ -96,6 +97,12 @@ void	_Cdecl	WriteComDevice (int ch)
 {
   comsend (ComPort,ch);
 } /* WriteComDevice */
+
+/* Fix a communications device after a DOS shell-out */
+void	_Cdecl	FixComDevice	(void)
+{
+  comfix (ComPort);
+} /* FixComDevice */
 
 /* Test to see if the connection to the remote device exists. */
 int	_Cdecl	TestConnection (void)

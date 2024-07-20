@@ -1,4 +1,4 @@
-			    UW/PC Version 1.01
+			    UW/PC Version 1.02
 
 			     Rhys Weatherley
 
@@ -6,7 +6,7 @@
 
 1. INTRODUCTION
 
-This is version 1.01 of UW/PC, a multiple-window interface to UNIX for
+This is version 1.02 of UW/PC, a multiple-window interface to UNIX for
 IBM-PC's and compatible computers.  This program is based on a program
 written for the Macintosh by John Bruner.  It provides up to seven
 separate login sessions on the remote UNIX machine, and requires the
@@ -20,20 +20,21 @@ distribution is available in the directory "info-mac/unix" on
 "sumex-aim.standford.edu" [36.44.0.6].  The files are named 
 "uw-42-part1.shar" ... "uw-42-part8.shar".  In Australia, the UW server
 can be found in the directory "info-mac/unix" on "ditmela.mel.dit.csiro.au"
-[128.250.90.81].
+[128.250.90.81].  A copy of the server source code without the Macintosh
+program binaries is included in this release.
 
-Version 1.01 is primarily a beta-test release, and comments are invited
-to the author.  It implements the Unix Windows protocols 0 and 1.  Protocol
-2 (with more control over window management) was not implemented because of
-the nature of the IBM-PC's display technology.  A Windows 3.0 version is a
-possible future project, but was not tackled initially because of time and
-resource constraints.
+Version 1.02 is the first public release, and comments are invited to the
+author.  It implements the Unix Windows protocols 0 and 1.  Protocol 2 (with
+more control over window management) was not implemented because of the nature
+of the IBM-PC's display technology.  A Windows 3.0 version is a possible
+future project, but was not tackled initially because of time and resource
+constraints.
 
 UW/PC is distributed under the terms of the GNU General Public License
 (version 1), a copy of which is included.  Note however that the server
 is NOT covered under this license and comes under the terms and conditions
-contained within it, and that I am not affiliated with the Free Software
-Foundation in any way.
+contained within its documentation.  Also, please note that I am not
+affiliated with the Free Software Foundation in any way.
 
 Comments about UW/PC can be sent to the author (me) at the e-mail
 address rhys.weatherley@gmail.com.
@@ -48,6 +49,7 @@ The following files should be present in the UW/PC distribution:
 	UWEG.CFG	An example configuration file - rename to
 			UW.CFG to use this file.
 	SETMODE.COM	A useful screen mode setting utility.
+	HISTORY		History of UW/PC versions.
 	UW-SRC.ZIP	The source code for UW/PC for Turbo C/C++.
 	UWSERVER.TAR	The source code for the UNIX server.
 
@@ -75,6 +77,16 @@ keystrokes are defined in protocol 0:
 		carrier signal is present.
 	ALT-J - Jump to a DOS shell.  Type "EXIT" at the DOS prompt to
 		return UW/PC.
+	ALT-R - Receive an ASCII file from the remote host.  You will
+		be prompted for a filename to place the data in.  When
+		the data has been transferred, press ESC to abort the
+		transfer.
+	ALT-S - Send the contents of an ASCII file to the remote host.
+		Lines will be terminated with carriage-return characters
+		only, and there is a 0.1 second pause between lines
+		to allow the remote host some time to "catch-up".  You
+		will be prompted for the filename to transfer.  Press
+		ESC to abort the transfer at any time.
 	ALT-U - Send the string defined by the "uw" configuration
 		variable.  This is useful once connected to start the
 		UW server on the UNIX host.  See "CONFIGURING UW/PC"
@@ -338,5 +350,5 @@ In future, UW/PC will be extended with the following capabilities: ANSI
 terminal emulation, X/Y/Zmodem file transfers in any window (and also
 protocol 0), XON/XOFF flow control, configurability of screen colours
 and modes, and support for a subset of the UW protocol 2 features which
-gives more control over window creation and appearance.  Comments and
-suggestions are very welcome.
+gives more control over window management.  Comments and suggestions
+are very welcome.
