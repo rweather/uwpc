@@ -1,0 +1,271 @@
+			    UW/PC Version 1.00
+			    ==================
+
+1. INTRODUCTION
+
+This is version 1.00 of UW/PC, a multiple-window interface to UNIX for
+IBM-PC's and compatible computers.  This program is based on a program
+written for the Macintosh by John Bruner.  It provides up to seven
+separate login sessions on the remote UNIX machine, and requires the
+UW server to be running on the UNIX host.  Before UW/PC can be used, the
+server must be compiled and installed on the UNIX machine.  The source
+code for the server, together with the Macintosh program can be found on
+many ftp archive sites.  In Australia, the UW server can be found in
+the directory "info-mac/unix" on "ditmela.mel.dit.csiro.au" [128.250.90.81].
+
+Version 1.00 is primarily a beta-test release, and comments are invited
+to the author.  It implements the Unix Windows protocols 0 and 1.  Protocol
+2 (with resizable windows and more control) was not implemented because of
+the nature of the IBM-PC's display technology.  A Windows 3.0 version is a
+possible future project, but was not tackled initially because of time and
+resource constraints.
+
+UW/PC is not public domain.  It is copyrighted.  However, permission to
+copy UW/PC is given provided that the copies are not sold and that the
+copyright notices are retained.  Only a distribution charge for disks and
+other media may be charged.
+
+Comments about UW/PC can be sent to the author (me) at the e-mail
+address rhys.weatherley@gmail.com.
+
+2. FILES
+
+The following files should be present in the UW/PC distribution:
+
+	UW.EXE		The actual UW/PC program itself.
+	UW.DOC		This documentation file.
+	UWEG.CFG	An example configuration file - rename to
+			UW.CFG to use this file.
+	SETMODE.COM	A useful screen mode setting utility.
+
+SETMODE was included to assist with configuration of the screen colours
+(see "CONFIGURING UW/PC" later).
+
+3. USING UW/PC
+
+When UW/PC starts, it initialises the screen and serial port, and then
+enters "Protocol 0", which is equivalent to the dumb terminal emulations
+available in conventional communications programs.  The default emulation
+is ADM31, but VT52 emulation is also available.  A number of special
+keystrokes are defined in protocol 0:
+
+	ALT-B - Send a line break over the serial link.  CTRL-BREAK and
+		CTRL-END will also send a line break.
+	ALT-D - Send the string defined by the "dial" configuration
+		variable to the modem.  See "CONFIGURING UW/PC" below.
+	ALT-H - Hangup the modem, by first dropping the DTR signal,
+		and then sending the hangup string if the carrier
+		signal is still present.
+	ALT-I - Send the modem initialisation string, even if a
+		carrier signal is present.
+	ALT-J - Jump to a DOS shell.
+	ALT-U - Send the string "uw" followed by a carriage return.
+		This is useful once connected to start the program
+		"uw" (the UW server) on the UNIX host.
+	ALT-X - Exit the program.  If any windows are present, they
+		will be destroyed.  This function does NOT hangup
+		the modem before exiting, so UW/PC can be restarted
+		in protocol 0 if required.
+	ALT-Q - Quit the program: same as ALT-X.
+	ALT-Z - Popup a small box containing descriptions of the
+		special keystrokes.  Press any key to resume.
+
+Protocol 0 exists to allow you to connect to the UNIX host in whatever
+way the host requires.  When you are ready to use the multi-window mode
+of UW/PC, execute the UW server on the remote host by typing its command
+name, or by pressing ALT-U if it's name is "uw".  Note that the server
+must be compiled and accessible for you to do this.
+
+The UW server sends a special control sequence which UW/PC interprets
+and automatically starts the multi-window session.  By default the
+server will also create a terminal window.  See the documentation that
+accompanies the server for information on modifying its behaviour. Once
+UW/PC has entered the multi-window session (protocol 1), up to 7 windows
+are available, ALT-U no longer has any effect, and the following
+additional special keystrokes are defined:
+
+	ALT-E - Exit the UW session and return to protocol 0.
+		A "kill window" request will be sent for all currently
+		active windows.
+	ALT-K - Kill the current window.
+	ALT-N - Create a new window if possible.  Up to 7 windows
+		may be created and used.  The status line will indicate
+		which windows are currently active.
+	ALT-n - "n" is a digit between 1 and 7.  These keystrokes
+		direct UW/PC to "jump" to the nominated window.
+
+Usually, if you exit a UNIX shell in a window, that window will be killed
+automatically, and when all windows have been killed, the UW session will
+terminate, returning you to protocol 0.  The UW server usually defaults
+to using ADM31 emulation whenever it creates a new window.  You may need
+to manually modify the terminal type in all windows to get the correct screen
+behaviour if you have set your default emulation type to something else in
+the configuration file.  If you are using the Korn shell "ksh", you can add
+the following lines to your ".kshrc" file to automatically change the
+terminal type to XXX, where XXX is your preferred type.
+
+		case $TERM in
+		  adm31) TERM=XXX export TERM ;;
+		  *) ;;
+		esac
+
+All of the special protocol 0 keystrokes also work in protocol 1, but
+it is inadvisable to use ALT-I during a UW session.  ALT-H will still
+hangup the modem, after exiting the UW session.  ALT-B will first exit
+any active UW session before sending the BREAK pulse.  This avoids some
+strange things that may occur with network terminal servers and the like.
+ALT-X will also terminate a UW session before exiting UW/PC.
+
+4. USING UW/PC WITH OTHER PROGRAMS
+
+UW/PC can be used as a stand-alone communciations program, or in
+conjunction with some other communciations program.  If you have a
+faviourite communications program (e.g. Telix, Procomm, etc), and have
+extensive "scripts", etc to connect you to a UNIX host, and still want
+to use these functions, you can still do so.  Once connected to the
+UNIX host (or whenever you are ready), you can shell out to a DOS
+shell (a function available in most programs), and execute UW/PC to
+handle the UW sessions.  Note that you must execute the UW server from
+within the control of UW/PC otherwise the startup control sequence may be
+missed.  You can exit UW/PC at any time to return to the other program.
+It may also be possible for your program's scripting language to
+automatically execute the UW/PC program once a UNIX host connection has
+been made.
+
+5. CONFIGURING UW/PC
+
+When UW/PC starts up, it first inspects the file "UW.CFG" in the current
+directory, and if that doesn't exist, the file "UW.CFG" in the directory
+the program was loaded from.  This plain ASCII text file is expected to
+contain configuration parameters for UW/PC.  If it is not found, defaults
+will be chosen for all parameters.  An example configuration file is
+distributed with UW/PC.  Each line of the file is of the form "name=arg"
+where "name" is the name of the configurable parameter, and "arg" is its
+argument.  Comments may be introduced starting with "#", but may not
+appear within commands.  The configurable parameters, which are all
+optional, and their defaults follow:
+
+	port (default 1)
+
+		The serial port to be used for communications.
+
+	baud (default 2400)
+
+		The baud rate to use for transmission.  This can be
+		one of 110, 150, 300, 600, 1200, 2400, 4800, 9600,
+		19200.
+
+	parity (default none)
+
+		The parity to use for transmission.  This can be one
+		of none, even or odd.
+
+	bits (default 8)
+
+		The number of data bits (7 or 8) to use for transmission.
+
+	stop (default 1)
+
+		The number of stop bits (1 or 2) to use for transmission.
+
+	init (default "ATZ^M~~~AT S7=45 S0=0 V1 X1^M~")
+
+		The modem initialisation string, delimited by double
+		quote characters.  "^" indicates the next character
+		should be interpreted as a control code, and "~"
+		indicates a 1/2 second pause.  The string cannot be
+		longer than 100 characters in length.
+
+	cinit (default yes)
+
+		Indicates whether or not the initialisation string should
+		be sent if the carrier already exists.  This can be either
+		yes or no.  When using UW/PC with other programs (see
+		above), it is useful to set this to "no" to prevent the
+		initialisation string being sent to the UNIX host once
+		connected.
+
+	hangup (default "~~~+++~~~ATH0^M")
+
+		The modem hangup string to use if after dropping the
+		DTR signal, the carrier is still present.  The string
+		cannot be longer than 100 characters in length.
+
+	emul (default adm31)
+
+		The default terminal emulation type to use for windows.
+		When a new window is created, it will use this emulation
+		type.  This can be one of adm31 or vt52.
+
+	xonxoff (default encoded)
+
+		This configuration variable specifies whether or not
+		the XON (CTRL-Q) and XOFF (CTRL-S) keys should be encoded
+		for transmission to a UW session, or sent direct without
+		any encoding.  This can be one of direct or encoded.  On
+		some systems, the modem connection is routed through a
+		"terminal server" which exists on the UNIX host's network.
+		Some of these terminal servers provide independent XON/XOFF
+		flow control, and process the XON and XOFF characters
+		themselves.  When the XON and XOFF characters are encoded
+		however, they are passed through to the actual UW session,
+		but because of the high level of buffering within the UW
+		server, they are practically useless to stop and start
+		the display.  By setting this variable to "direct", the
+		terminal server will receive the XON and XOFF characters,
+		giving better control over scrolling displays.
+
+	beep (default on)
+
+		Enable or disable the terminal beep.  This can be either
+		on or off.
+
+	dial (default "ATDT")
+
+		This string is sent to the modem when ALT-D is pressed,
+		as a shortcut for dialing.  You can modify this string to
+		contain a phone number if you wish.  e.g. "ATDP1234567^M"
+		will dial the number 1234567 using pulse dialing on a
+		Hayes compatible modem when ALT-D is pressed.
+
+On startup, UW/PC makes a choice of screen colours based on the current
+screen mode.  If the current mode is 0 (40x25 CGA mono), 2 (80x25 CGA mono)
+or 7 (80x25 MDA mono), a monochrome scheme will be chosen.  Otherwise,
+a colour scheme will be chosen.  Currently these colours cannot be
+modified, and the screen mode cannot be overridden by the program.  The
+utility program SETMODE.COM is provided to help out.  It takes a
+one-character argument corresponding to the mode to set.  e.g. "SETMODE 3"
+or "SETMODE 2".  There must only be ONE space between the command-name
+and the one-character argument, since the command is very primitive, but
+effective.  An 80x25 screen mode will always be used regardless of the
+current screen size.
+
+6. LIMITATIONS
+
+UW/PC and the UW server have a number of limitations.  Primarily, if
+a large amount of output is appearing in one window, the UW server will
+be slow to process input and output in another.  This is a limitation
+of the server, and not UW/PC.  The second limitation is unavoidable.
+With all serial communciations over telephone and other serial links,
+errors in transmission are likely to occur.  The UW protocols have no
+provision for error-free transmission of information, and especially
+the special UW commands that are sent back and forth between UW/PC and
+the UW server.  If errors occur in the transmission of these commands,
+strange things like output appearing in the wrong windows may result.
+Since the commands are fairly rare (usually only when swapping windows
+for input or output), and the chances of normal data being corrupted
+into legal UW commands is very small, very few problems should result
+on reasonably clean modem connections.  As a last resort, you can
+press ALT-E to return to protocol 0, and if the UW server hasn't
+exited (because the exit command was corrupted), you can press "CTRL-A"
+followed by the "Delete" key, which corresponds to the UW exit command,
+and should abort the UW server.
+
+7. FUTURE WORK
+
+In future, UW/PC will be extended with the following capabilities: ANSI
+terminal emulation, X/Y/Zmodem file transfers in any window (and also
+protocol 0), XON/XOFF flow control, configurability of screen colours,
+and support for a subset of the UW protocol 2 features which gives more
+control over window creation and appearance.  Comments and suggestions
+are very welcome.
