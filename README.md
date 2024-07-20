@@ -45,6 +45,10 @@ The original MS-DOS code was designed to be built with Turbo C++.
 I switched to Borland C++ for the later Windows version.  You will need
 that or something similar if you want to build it.
 
+John Bruner's original server code was designed to be built on mid-1980's
+BSD 4.3 systems and is written in K&R C.  It would need a lot of work to
+build it for modern ANSI C and POSIX compatible systems.
+
 See the [HISTORY](HISTORY.TXT) file for release notes on each version.
 
 Executables

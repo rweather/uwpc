@@ -1,0 +1,12 @@
+a 100
+mov al,[82]
+sub al,30
+xor ah,ah
+int 10
+int 20
+
+rcx
+000B
+n setmode.com
+w
+q

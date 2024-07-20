@@ -1,0 +1,25 @@
+This directory contains three items that may be of interest:
+
+
+	getopt.c	The AT&T version of the getopt() library
+			routine (for command-line processing).  This
+			version, to the best of my knowledge, was
+			placed into the public domain by AT&T.
+
+	
+	macmouse.ml	A package for use with Gosling's EMACS
+			which intreprets encoded mouse-down and
+			mouse-up events within windows to perform
+			various operations.
+
+			Author: Chris Kent (kent@decwrl.dec.com)
+
+
+	macmouse.el	A similar macro package for GNU EMACS.
+
+			Author: Gregory Lauer (glauer@bbn.arpa)
+
+
+The two EMACS macro packages were developed for a previous version of
+UW (version 2.10).  Since I (John Bruner) am not an EMACS user, I do
+not know how well they will work with UW v4.2.

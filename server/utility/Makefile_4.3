@@ -1,0 +1,75 @@
+#! /bin/make -f
+#
+#	uw utility makefile (4.3BSD)
+#
+#	INCDIR should be set to the directory containing header files.
+#
+#	LIBUW should be set to the name of the library file (or, if it is
+#	installed in a system directory, "-luw").
+#
+#	Note: in order for "uwterm" to work on remote machines it is
+#	necessary for it to be installed in a directly where "rsh"
+#	will find it.  The #defined symbol UWTERM in the source can
+#	be set to the desired absolute pathname, if necessary.
+#
+
+INCDIR	=	../h
+
+LIBUW	=	../lib/libuw.a
+
+UWTOOL_OBJS =	uwtool.o
+UWTITLE_OBJS =	uwtitle.o
+UWTERM_OBJS =	uwterm.o
+UWPLOT_OBJS =	uwplot.o
+
+OBJECTS	=	$(UWTOOL_OBJS) $(UWTITLE_OBJS) $(UWTERM_OBJS) $(UWPLOT_OBJS)
+
+SOURCES	=	`echo $(OBJECTS) | sed -e 's/\\.o/\\.c/g'`
+
+DEFINES	=	`cat ../DEFINES`
+
+CFLAGS	=	-O -I$(INCDIR) $(DEFINES)
+LFLAGS	=
+
+all:		uwtool uwtitle uwterm uwplot
+
+uwtool:		$(UWTOOL_OBJS)
+	$(CC) -o $@ $(LFLAGS) $(UWTOOL_OBJS) $(LIBUW)
+
+uwtitle:	$(UWTITLE_OBJS)
+	$(CC) -o $@ $(LFLAGS) $(UWTITLE_OBJS) $(LIBUW)
+
+uwterm:		$(UWTERM_OBJS)
+	$(CC) -o $@ $(LFLAGS) $(UWTERM_OBJS) $(LIBUW)
+
+uwplot:		$(UWPLOT_OBJS)
+	$(CC) -o $@ $(LFLAGS) $(UWPLOT_OBJS) $(LIBUW)
+
+lint:
+	for src in $(SOURCES); \
+	do echo $$src:; lint -hubx -I$(INCDIR) $(DEFINES) $$src; done
+
+tags:
+	ctags $(SOURCES)
+
+depend: 
+	$(CC) -M -I$(INCDIR) $(DEFINES) $(SOURCES) | \
+	sed -e ':loop' \
+	    -e 's/\.\.\/[^ /]*\/\.\./../' \
+	    -e 't loop' | \
+	awk ' { if ($$1 != prev) { print rec; rec = $$0; prev = $$1; } \
+		else { if (length(rec $$2) > 78) { print rec; rec = $$0; } \
+		       else rec = rec " " $$2 } } \
+	      END { print rec } ' >> makedep
+	echo '/^# DO NOT DELETE THIS LINE/+1,$$d' >eddep
+	echo '$$r makedep' >>eddep
+	echo 'w' >>eddep
+	cp Makefile Makefile.bak
+	ex - Makefile < eddep
+	rm eddep makedep
+
+clean:
+	-rm -f *.o
+
+# DO NOT DELETE THIS LINE (or the following blank line) -- make depend uses it
+

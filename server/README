@@ -1,0 +1,78 @@
+			    UW Version 4.2
+			    31 January 1988
+
+This is version 4.2 of UW, a multiple-window interface to UNIX for
+the Macintosh computer.  The distribution for UW consists of two
+binary files for the Macintosh (in BinHex 4.0 format) and a number
+of source files for the (BSD) UNIX server.
+
+The distribution includes the following directories:
+
+	h	- all UW include files
+	server	- source code for the UW server
+	lib	- source code for the UW programmer's library
+	utility	- source code for miscellaneous utility programs
+	doc	- [nt]roff documentation (-ms and -man formats)
+	hqx	- Macintosh binary files
+	misc	- other things of possible interest
+
+The two Macintosh files are "uw.hqx", which is the executable binary
+and "uw.doc.hqx", which is a MacWrite-format document describing the
+Macintosh user interface.
+
+UW was developed alternately on a Sun 3 and 4.3BSD VAX.  It also
+has been tested (more briefly) on a Sun 2 (release 2.0), Integrated
+Solutions VME 68020 (release 3.05), and a Pyramid. It depends quite a
+bit upon BSD-specific features such as interprocess communication and
+will not run without modification on a System V UNIX system.
+
+This distribution, like the version 3.4 distribution, includes
+make files for both 4.2BSD and 4.3BSD.  The choice of make files
+and other configuration options is determined by the top-level
+"Makefile".  Comments in that file describe the configuration options.
+
+A "make install" in the top-level directory will compile and install
+all of the (UNIX) pieces of the UW distribution.  As distributed,
+this will create a link between the directory name "/usr/include/uw"
+and the "h" subdirectory and will create a "/usr/local/bin/libuw.a"
+library file.  These two steps allow application program to use
+	#include <uw/uwlib.h>
+and
+	cc -o xyzzy xyzzy.o -luw
+for greater convenience in creating programs that use the UW library.
+
+If you do not have the "getopt" library routine, you will find the
+source in "misc/getopt.c"  This source code was publicly distributed by
+AT&T and is also available in the "mod.sources" archive.  You should
+compile it and install it in your machine's "/lib/libc.a"  (Note that
+since it uses "strchr", you should compile it on a BSD system with the
+command "cc -O -c getopt.c -Dstrchr=index".)  [Sorry, I can't find a
+manual page which I can (legally) include.]  If you can't change
+"libc.a", then you should add it to the makefiles in the "server"
+and "lib" directories.
+
+Version 4.2 is primarily a maintenance release.  Because of constraints
+on the author's time, few things have changed since version 4.1.  Some
+of the differences are:
+
+    1)	UW v4.2 is compatible with Multifinder.  It understands background
+	events, so it can receive input and update windows even when
+	another application's window is active.
+
+    2)	Some problems relating to keyboard mapping have been fixed.
+	UW recognizes the Control and ESC keys.  The mapping for the
+	numeric keypad still seems to be incomplete.  The author is
+	hampered by the fact that his development machine still has
+	its original 512K Mac keyboard.  (He dislikes the Mac+ and
+	SE keyboards.)
+
+    3)	A new window type -- plot -- has been defined.  This type of
+	window can only be created by the host.  It interprets output
+	in UNIX v7 plot(5) format.
+
+    4)	Windows may use 7, 9, 10, or 12 point fixed-width fonts.
+	UW includes non-Apple-copyrighted Mishawaka fonts for these sizes.
+
+UW is not public domain.  It is copyrighted.  However, permission to
+copy UW is given provided that the copies are not sold and that the
+copyright notices are retained.

@@ -1,0 +1,51 @@
+#! /bin/make -f
+#
+#	uw makefile (4.2BSD)
+#
+# INCDIR names the directory where the header files are located.
+#
+# OBJECTS names all of the object files required for the server.
+#
+
+INCDIR	=	../h
+
+OBJECTS	=	uw_clk.o uw_env.o uw_fd.o uw_ipc.o uw_main.o uw_opt.o \
+		uw_pcl.o uw_tty.o uw_utmp.o uw_win.o openpty.o
+
+SOURCES	=	`echo $(OBJECTS) | sed -e 's/\\.o/\\.c/g'`
+
+DEFINES	=	`cat ../DEFINES`
+
+CFLAGS	=	$(DEFINES) -I$(INCDIR) -O
+LFLAGS	=
+
+uw:		$(OBJECTS)
+	$(CC) $(LFLAGS) -o uw $(OBJECTS) $(LIBS)
+
+lint:
+	lint -hbx -I$(INCDIR) $(DEFINES) $(SOURCES)
+
+tags:
+	ctags $(SOURCES)
+
+depend: 
+	grep '^#include' $(SOURCES) | \
+	sed -e '/</d' \
+	    -e 's/:[^"]*"\([^"]*\)".*/: ..\/h\/\1/' \
+	    -e 's,^../[a-zA-Z0-9]*/\([^\.]*\)\.[cs],\1.o \1.L,' | \
+	awk ' { if ($$1 != prev) { print rec; rec = $$0; prev = $$1; } \
+		else { if (length(rec $$3) > 78) { print rec; rec = $$0; } \
+		       else rec = rec " " $$3 } } \
+	      END { print rec } ' > makedep
+	echo '/^# DO NOT DELETE THIS LINE/+1,$$d' >eddep
+	echo '$$r makedep' >>eddep
+	echo 'w' >>eddep
+	cp Makefile Makefile.bak
+	ex - Makefile < eddep
+	rm eddep makedep
+
+clean:
+	rm *.o
+
+# DO NOT DELETE THIS LINE (or the following blank line) -- make depend uses it
+

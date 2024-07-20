@@ -1,0 +1,65 @@
+#! /bin/make -f
+#
+#	uw library makefile (4.2BSD)
+#
+# INCDIR names the directory in which header files are located.
+# SERVERDIR names the directory containing the server source.
+# SERVER_OBJS names the object files derived from sources in SERVERDIR.
+# OBJECTS names all of the object files required for the library.
+#
+INCDIR	=	../h
+
+SERVERDIR =	../server
+
+SERVER_OBJS =	$(SERVERDIR)/openpty.o $(SERVERDIR)/uw_env.o
+
+OBJECTS	=	uw_cmd.o uw_close.o uw_detach.o uw_fork.o uw_kill.o \
+		uw_netadj.o uw_new.o uw_optcmd.o uw_optfn.o uw_options.o \
+		uw_perror.o uw_ttype.o \
+		uw_rsetopt.o uw_shell.o \
+		uw_gvis.o uw_gtype.o uw_gtitle.o uw_gwsize.o uw_gpos.o \
+		$(SERVER_OBJS)
+
+SOURCES	=	`echo $(OBJECTS) | sed -e 's/\\.o/\\.c/g'`
+
+DEFINES	=	`cat ../DEFINES`
+
+CFLAGS	=	-O -I$(INCDIR) $(DEFINES)
+
+TARGET	=	libuw.a
+
+$(TARGET):	$(OBJECTS)
+	ar cr $(TARGET) `lorder $(OBJECTS) | tsort`
+	ranlib $(TARGET)
+	-if [ ! -f uwlib.a ];then ln -s libuw.a uwlib.a;fi
+
+$(SERVER_OBJS):
+	cd $(SERVERDIR); make `basename $@`
+
+lint:
+	lint -uhbx -I$(INCDIR) $(DEFINES) $(SOURCES)
+
+tags:
+	ctags $(SOURCES)
+
+depend: 
+	grep '^#include' $(SOURCES) | \
+	sed -e '/</d' \
+	    -e 's/:[^"]*"\([^"]*\)".*/: ..\/h\/\1/' \
+	    -e 's,^../[a-zA-Z0-9]*/\([^\.]*\)\.[cs],\1.o \1.L,' | \
+	awk ' { if ($$1 != prev) { print rec; rec = $$0; prev = $$1; } \
+		else { if (length(rec $$3) > 78) { print rec; rec = $$0; } \
+		       else rec = rec " " $$3 } } \
+	      END { print rec } ' > makedep
+	echo '/^# DO NOT DELETE THIS LINE/+1,$$d' >eddep
+	echo '$$r makedep' >>eddep
+	echo 'w' >>eddep
+	cp Makefile Makefile.bak
+	ex - Makefile < eddep
+	rm eddep makedep
+
+clean:
+	-rm *.o
+
+# DO NOT DELETE THIS LINE (or the following blank line) -- make depend uses it
+
