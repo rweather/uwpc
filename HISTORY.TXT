@@ -18,6 +18,7 @@
 	Many enhancements including abstract code for terminal descriptions
 	and a client structure for supporting terminal emulations, file
 	transfers, etc.  (beta-release)
+2.01	Added clipboard routines.
 
 			History of TERMCC Versions
 			==========================

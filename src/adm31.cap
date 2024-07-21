@@ -26,6 +26,7 @@
 //  -------  --------  --  --------------------------------------
 //    1.0    04/04/91  RW  Original Version of ADM31.CAP
 //    1.1    24/05/91  RW  Add some other "adm"-series codes.
+//    1.2    25/07/91  RW  Add support for client escapes.
 //
 //-------------------------------------------------------------------------
 
@@ -88,9 +89,13 @@ escproc:	getch			// Get the escape character.
 		  '3',dummy		// adm42 - cursor visibilites.
 		  'I',loop		// adm42,22 - backtab (ignored for now)
 		  'i',tabproc		// adm22
+		  '|',doclient		// UW/PC client escape code
 		endsw
 		jmp	loop		// Ignore the escape sequence.
 dummy:		getch			// Skip the cursor visibility char.
+		jmp	loop
+doclient:	getch			// Get the client operation character.
+		client			// Do a client operation.
 		jmp	loop
 insertch:	insblank		// Insert a blank here.
 		jmp	loop

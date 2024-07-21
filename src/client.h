@@ -25,6 +25,7 @@
 //  Version  DD/MM/YY  By  Description
 //  -------  --------  --  --------------------------------------
 //    1.0    20/03/91  RW  Original Version of CLIENT.H
+//    1.1    08/06/91  RW  Add declarations for mouse handling.
 //
 //-------------------------------------------------------------------------
 
@@ -111,6 +112,14 @@ public:
 	// Get an argument for the %0-%9 status line escape codes.
 	virtual	int	getstatarg	(int digit) { return (0); };
 
+	// Process an event from the mouse.  This will be called
+	// whenever the mouse is detected to move or the button
+	// status of the mouse changes.  Note that the co-ordinates
+	// given are screen co-ordinates - not window co-ordinates.
+	// Mouse events are sent to the top-most window always.
+	virtual	void	mouse	(int x,int y,int buttons)
+		  { if (underneath) underneath -> mouse (x,y,buttons); };
+
 };
 
 //
@@ -128,6 +137,7 @@ public:
 	virtual	char far *name	() { return ((char far *)" TTY"); };
 	virtual	void	key	(int keypress);
 	virtual	void	remote	(int ch);
+	virtual	void	mouse	(int x,int y,int buttons);
 
 };
 

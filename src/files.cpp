@@ -29,6 +29,7 @@
 //-------------------------------------------------------------------------
 
 #include <stdio.h>		// Standard I/O routines.
+#include "extern.h"		// DOS/Windows 3.0 declarations.
 #include "files.h"		// Declarations for this module.
 #include "keys.h"		// Keyboard handling declarations.
 #include "uw.h"			// Declarations for the protocol master.
@@ -92,7 +93,7 @@ void	UWAsciiFileTransfer::tick (void)
       if (ch == '\n')		// Check for the end of the line.
         {
 	  send ('\r');		// Send a CR character at the end of lines.
-	  delay (10);		// Delay 10ms between lines to allow catch-up.
+	  DELAY_FUNC (10);	// Delay 10ms between lines to allow catch-up.
 	}
        else if (ch != EOF)
         send (ch);		// Send the transfer character directly.

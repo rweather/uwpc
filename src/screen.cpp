@@ -31,6 +31,7 @@
 
 #include "screen.h"		// Declarations for this module.
 #include "config.h"		// Configuration declarations.
+#include "mouse.h"		// Mouse handling routines.
 #include <dos.h>		// Turbo C++ DOS/BIOS/hardware routines.
 #include <conio.h>		// Turbo C++ console routines.
 #include <mem.h>		// Memory manipulation routines.
@@ -94,7 +95,7 @@ int	ScreenClass::init (int color,int large)
         attributes[temp] = UWConfig.NewAttrs[temp];
     }
   textmode (mode);
-  shape (CURS_UNDERLINE);
+  shape ((CursorShapes)UWConfig.CursorSize);
   width = 80;
   height = 25;
   delay (10);		// Initialise Turbo C++'s delay timer.
@@ -195,10 +196,12 @@ void	ScreenClass::draw (int x,int y,unsigned pair,int dialog)
       if (y >= dlgy1 && y <= dlgy2 && x >= dlgx1 && x <= dlgx2)
         return;		// Ignore when in the area of the dialog box.
     }
+  HideMouse ();		// Turn off mouse if necessary.
   if (flags & FLAG_SNOW)
     drawsnow (screenram + x + (y * width),pair);
    else
     screenram[x + (y * width)] = pair;
+  ShowMouse ();		// Turn the mouse back on.
 } // ScreenClass::draw //
 
 // Draw a lines of character/attribute pairs on the screen.
@@ -212,6 +215,7 @@ void	ScreenClass::line (int x,int y,unsigned *pairs,int numpairs,
       if (y >= dlgy1 && y <= dlgy2 && x <= dlgx2)
         {
 	  // Send the line direct, but ignore where it crosses dialog box.
+	  HideMouse ();
 	  while (numpairs-- > 0)
 	    {
 	      if (x < dlgx1 || x > dlgx2)
@@ -224,9 +228,11 @@ void	ScreenClass::line (int x,int y,unsigned *pairs,int numpairs,
 	      ++x;
 	      ++pairs;
 	    }
+	  ShowMouse ();
 	  return;		// Ignore the rest of this function.
 	}
     }
+  HideMouse ();
   if (flags & FLAG_SNOW)
     {
       while (numpairs-- > 0)
@@ -237,6 +243,7 @@ void	ScreenClass::line (int x,int y,unsigned *pairs,int numpairs,
       while (numpairs-- > 0)
         *screen++ = *pairs++;
     }
+  ShowMouse ();
 } // ScreenClass::line //
 
 // Scroll an area of the screen a number of lines.
@@ -253,7 +260,9 @@ void	ScreenClass::scroll (int x1,int y1,int x2,int y2,int lines,
   regs.h.ch = y1;
   regs.h.dl = x2;
   regs.h.dh = y2;
+  HideMouse ();
   int86 (0x10,&regs,&regs);
+  ShowMouse ();
 } // ScreenClass::scroll //
 
 // Clear the screen and shell out to DOS.  Restore the screen
@@ -269,9 +278,12 @@ void	ScreenClass::jumpdos (char *cmdline)
   savey = regs.h.dh;
   saveshape = regs.x.cx;
   textattr (oldattr);
+  HideMouse ();
   clrscr ();
   gotoxy (1,1);
   shape (CURS_UNDERLINE);
+  if (UWConfig.EnableMouse)
+    TermMouse ();		// Terminate mouse during shell-out.
   if (cmdline)
     system (cmdline);		// Execute the DOS command.
    else
@@ -280,6 +292,8 @@ void	ScreenClass::jumpdos (char *cmdline)
       system ("");
     }
   textmode (mode);
+  if (UWConfig.EnableMouse)
+    UWConfig.EnableMouse = InitMouse (); // Enable the mouse again.
   cursor (savex,savey);
   regs.h.ah = 1;
   regs.x.cx = saveshape;

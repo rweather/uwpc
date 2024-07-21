@@ -26,6 +26,7 @@
    -------  --------  --  --------------------------------------
      1.0    23/03/91  RW  Original Version of TERMCC.L
      1.1    25/01/91  RW  Add more instructions to support ANSI
+     1.2    25/07/91  RW  Added the "client" instruction
 
 -------------------------------------------------------------------------*/
 
@@ -111,6 +112,7 @@ setc			return (CMD_SETC);
 saveattr		return (CMD_SAVEATTR);
 restattr		return (CMD_RESTATTR);
 insblank		return (CMD_INSBLANK);
+client			return (CMD_CLIENT);
 [a-z_A-Z][a-z_A-Z0-9]*	{ if ((yylval = addident (yytext)) == -1)
 			    parsefatal ("Out of symbol table space");
 			   else

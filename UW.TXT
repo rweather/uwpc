@@ -1,4 +1,4 @@
-			    UW/PC Version 2.00
+			    UW/PC Version 2.01
 
 			     Rhys Weatherley
 
@@ -6,7 +6,7 @@
 
 1. INTRODUCTION
 
-This is version 2.00 of UW/PC, a multiple-window interface to UNIX for
+This is version 2.01 of UW/PC, a multiple-window interface to UNIX for
 IBM-PC's and compatible computers.  This program is based on a program
 written for the Macintosh by John Bruner.  It provides up to seven
 separate login sessions on the remote UNIX machine, and requires the
@@ -21,18 +21,27 @@ distribution is available in the directory "info-mac/unix" on
 "uw-42-part1.shar" ... "uw-42-part8.shar".  In Australia, the UW server
 can be found in the directory "info-mac/unix" on "ditmela.mel.dit.csiro.au"
 [128.250.90.81].  A copy of the server source code without the Macintosh
-program binaries is included in this release.
+program binaries is included in this release.  For those of you who have
+previously compiled the server, there has been no change at all to the
+server code.
 
-Version 2.00 of UW/PC is a total rewrite of the previous version (1.05) in
-C++ to give a better program structure for the upcoming enhancements to UW/PC.
-Comments are invited to the author.  This version implements the Unix Windows
-protocols 0 and 1.  Protocol 2 (with more control over window management) is
-going to be supported in an upcoming Windows 3.0 version, however some small
-parts of Protocol 2 are present in this version which make Protocol 1 start
-faster.  Protocol 2 is not fully supported in the DOS versions because of the
-complexity of the windowing code that is necessary.  This version includes a
-terminal emulation compiler for creating new terminal types using a small
-assembly-code like language.  It is described in the file TERMCC.DOC.
+Version 2.01 of UW/PC is a total rewrite of the previous public release
+(1.05) in C++ to give a better program structure for the upcoming enhancements
+to UW/PC.  Comments are invited to the author.  This version implements the
+Unix Windows protocols 0 and 1.  Protocol 2 (with more control over window
+management) is going to be supported in an upcoming Windows 3.0 version,
+however some small parts of Protocol 2 are present in this version which make
+Protocol 1 start faster.  Protocol 2 is not fully supported in the DOS
+versions because of the complexity of the windowing code that is necessary.
+
+There are now many more configuration options, so even if you have used UW/PC
+before, I suggest that you read the section "CONFIGURING UW/PC" later in this
+documentation.  If you wish to use the new ANSI terminal emulation option,
+then you should read the discussion on terminal types in the section "USING
+UW/PC" below.  This version includes a terminal emulation compiler for
+creating new terminal types using a small assembly-code like language.  It
+is described in the file TERMCC.DOC, but will not be required for most users -
+just those who want to write their own terminal types.
 
 UW/PC is distributed under the terms of the GNU General Public License
 (version 1), a copy of which is included.  Note however that the server
@@ -40,7 +49,7 @@ is NOT covered under this license and comes under the terms and conditions
 contained within its documentation.  Also, please note that I am not
 affiliated with the Free Software Foundation in any way, and that further
 releases of this program may not have source code included or be distributed
-under the GNU General Public License.
+under the GNU General Public License, but probably will.
 
 Comments about UW/PC can be sent to the author (me) at the e-mail
 address rhys.weatherley@gmail.com.
@@ -65,7 +74,7 @@ SETMODE was included to assist with configuration of the screen colours
 (see "CONFIGURING UW/PC" later).  The Macintosh binaries have been stripped
 from the server, and can be obtained from one of the FTP sites mentioned
 above if desired.  The source code in UWSERVER.TAR should be compiled on
-the UNIX host to allow the full potential of UW/PC to be used.
+the UNIX host to allow the full multi-window potential of UW/PC to be used.
 
 3. READ THIS IF YOU ARE HAVING TROUBLE
 
@@ -77,6 +86,11 @@ this file to the UNIX machine in binary mode (in some way), uuencode it and
 send it to me via e-mail.  This will help me to know EXACTLY what you are
 doing, and so I may be able to find the bugs more easily.
 
+On some systems, the server will abort when it is started with a message like
+"no ttys".  If this happens, recompile the server after modifying the
+Makefile to compile using BSD4.2 instead of BSD4.3 and play with the
+compilation options.  This is discussed in the Makefile for the server.
+
 4. USING UW/PC
 
 When UW/PC starts, it initialises the screen and serial port, and then
@@ -87,6 +101,14 @@ special keystrokes are defined in protocol 0:
 
 	ALT-B - Send a line break over the serial link.  CTRL-BREAK and
 		CTRL-END will also send a line break.
+	ALT-C - Start a "cut" operation.  You can select a region in
+		the current window to cut and place in the clipboard.
+		Press RETURN at each corner and ESC to quit.  You can
+		also use the mouse to select a region of the current
+		window.  Press down and hold the left mouse button at
+		one corner of the region and release it at the other
+		corner.  This will only work if the mouse is enabled.
+		See "CONFIGURING UW/PC" below.
 	ALT-D - Send the string defined by the "dial" configuration
 		variable to the modem.  See "CONFIGURING UW/PC" below.
 	ALT-H - Hangup the modem, by first dropping the DTR signal,
@@ -95,16 +117,29 @@ special keystrokes are defined in protocol 0:
 	ALT-I - Send the modem initialisation string, even if a
 		carrier signal is present.
 	ALT-J - Jump to a DOS shell.  Type "EXIT" at the DOS prompt to
-		return UW/PC.
+		return to UW/PC.
 	ALT-L - Start and stop an ASCII capture.  You will be prompted
 		for a file name to store all data coming from the remote
 		host in until you press ALT-L again.  If you have the
 		status line set to display the terminal type then it
 		will change to "CAP" while the capture is in effect.
+	ALT-P - Paste the contents of the clipboard into the current
+		window.  If a paste is currently active in another
+		window then the paste will be ignored.  After every line
+		is sent to the remote host a 10ms pause will be made
+		to allow the remote host to catch up.  You can also press
+		the right mouse button to start a paste if the mouse
+		is enabled.
 	ALT-R - Receive a file from the remote host.  See UPLOADS AND
 		DOWNLOADS below.
 	ALT-S - Send the contents of a file to the remote host.  See
 		UPLOADS AND DOWNLOADS below.
+	ALT-T - Send a string of the form "stty rows N columns M" to the
+		remote host.  This is useful for resetting the remote
+		host's idea of what the current window size is.  Sometimes
+		Unix systems get confused as to the size of a terminal
+		type (usually 80x24 in UW/PC), and so this command will
+		send an "stty" command-line to correct it.
 	ALT-U - Send the string defined by the "uw" configuration
 		variable.  This is useful once connected to start the
 		UW server on the UNIX host.  See "CONFIGURING UW/PC"
@@ -112,7 +147,7 @@ special keystrokes are defined in protocol 0:
 	ALT-X - Exit the program.  If any windows are present, they
 		will be destroyed.  This function does NOT hangup
 		the modem before exiting, so UW/PC can be restarted
-		in protocol 0 if required.
+		in protocol 0 and connected to the remote host if required.
 	ALT-Q - Quit the program: same as ALT-X.
 	ALT-Z - Popup a small box containing descriptions of the
 		special keystrokes.  Press any key to resume.
@@ -127,9 +162,9 @@ accessible for you to do this.
 The UW server sends a special control sequence which UW/PC interprets
 and then automatically starts the multi-window session.  By default the
 server will also create a terminal window.  See the documentation that
-accompanies the server for information on modifying its behaviour. Once
-UW/PC has entered the multi-window session (protocol 1), up to 7 windows
-are available, ALT-U no longer has any effect, and the following
+accompanies the server for information on modifying its startup behaviour.
+Once UW/PC has entered the multi-window session (protocol 1), up to 7
+windows can be created, ALT-U no longer has any effect, and the following
 additional special keystrokes are defined:
 
 	ALT-E - Exit the UW session and return to protocol 0.
@@ -138,13 +173,20 @@ additional special keystrokes are defined:
 	ALT-K - Kill the current window.
 	ALT-N - Create a new window if possible.  Up to 7 windows
 		may be created and used.  The status line will indicate
-		which windows are currently active.
+		which windows are currently active if you have set it
+		correctly.  (See "CONFIGURING UW/PC" below).
+	ALT-W - Cycle to the next window.  e.g. if you are in window 3,
+		then you will cycle to the next highest numbered window,
+		cycling back to 1 if necessary.  This is useful to quickly
+		switch between windows.  ALT-0 may also be used for this.
 	ALT-n - "n" is a digit between 1 and 7.  These keystrokes
 		direct UW/PC to "jump" to the nominated window.
 
 Usually, if you exit a UNIX shell in a window, that window will be killed
 automatically, and when all windows have been killed, the UW session will
-terminate, returning you to protocol 0.
+terminate, returning you to protocol 0.  If protocol 1 does not exit, then
+you can try some of the procedures given in the "LIMITATIONS" section
+later in this document.
 
 The UW server usually defaults to using ADM31 emulation whenever it creates
 a new window.  You may need to manually modify the UNIX terminal type in the
@@ -171,14 +213,50 @@ are for layout only, and shouldn't appear in the actual value):
 	cm=\E=%+ %+ :cl=^Z:cd=\EY:co#80:dc=\EW:dl=\ER:
 	ei=\Er:ho=^^:im=\Eq:li#24:mi:nd=^L:up=^K:MT:km:so=\EG1:se=\EG0:
 
-Alternatively, setting the "emul0" configuration variable to "vt52" will
-allow you to use VT52 emulation in protocol 0, which is usually defined
-in all termcap and terminfo entries.  ADM31 emulation will still be used
-for UW session windows if the "emul" variable is set to "adm31".  ADM31
+Alternatively, setting the "emul0" configuration variable to "vt52" or "ansi"
+will allow you to use VT52 or ANSI emulation in protocol 0, which are usually
+defined in all termcap and terminfo entries.  ADM31 emulation will still be
+used for UW session windows if the "emul" variable is set to "adm31".  ADM31
 emulation is much "smarter" than VT52, so you will probably want to use
 it wherever possible.  ANSI emulation is also available and this is much
 smarter than ADM31, but because the UW server defaults to ADM31, you
 may still want to use it instead of ANSI.
+
+If you do want to use the ANSI emulation mode and the "ansi" termcap on your
+Unix host is "brain-dead" (i.e. it doesn't support very much), then you
+can set the TERMCAP variable to the following value to get a smarter ANSI
+emulation:
+
+	ansi:am:bs:pt:co#80:li#24:kn#3:
+        	:AL=\E[%dL:DL=\E[%dM:DO=\E[%dB:IC=\E[%d@:LE=\E[%dD:
+        	:RI=\E[%dC:UP=\E[%dA:al=\E[L:bt=\E[Z:cd=\E[J:ce=\E[K:
+        	:cl=\E[H\E[J:cm=\E[%i%d;%dH:ct=\E[2g:
+        	:dc=\E[P:dl=\E[M:ho=\E[H:ic=\E[@:kb=\b:kd=\E[B:
+        	:kh=\E[H:kl=\E[D:kr=\E[C:ku=\E[A:nd=\E[C:
+        	:se=\E[m:so=\E[7m:st=\EH:ue=\E[m:up=\E[A:us=\E[4m:
+        	:k1=\EOP:k2=\EOQ:k3=\EOR:k4=\EOS:
+
+To find out if the "ansi" termcap on your computer is "brain-dead", search
+the file "/etc/termcap" on the Unix host for the string "|ansi|" and if it
+only has a couple of lines listed before the next entry, then it is
+"brain-dead".  If there are 5 or more lines, then most likely your "ansi"
+termcap is OK.  Ask a local guru if you are unsure.  TERMCAP and TERMINFO
+gurus may want to play around with the various ANSI, VT100 and VT102
+compatible terminal types, etc to try and find something that has lots of
+features for working with editors such as emacs, etc.  See the ANSI.CAP file
+in the source archive and the documentation for TERMCC for more information
+on the capabilities of UW/PC's ANSI emulation.  Any suggestions (no matter
+how nasty :-) on the ANSI emulation are welcome.
+
+Adding the following lines to your ".kshrc" file is the best way to make sure
+that ANSI emulation is always correctly used in Protocol 1.  You can also use
+ANSI emulation in Protocol 0 if you desire.
+
+  case $TERM in
+    adm31) TERM=ansi export TERM ;;
+    *) ;;
+  esac
+  TERMCAP='ansi:  *** the ANSI string given above ***  ' export TERMCAP
 
 All of the special protocol 0 keystrokes except ALT-U also work in protocol
 1, but it is inadvisable to use ALT-I during a UW session.  ALT-H will still
@@ -200,7 +278,7 @@ other windows will grind to a halt.  Except in the case of a ZMODEM receive,
 you will be prompted for the filename of the file to be transfered.  To use
 DSZ for ZMODEM transfers, you will need to have DSZ.COM somewhere in your
 PATH for it to be accessible.  Note that the DSZ command "ALT-N" will allow
-you to "nuke" a transfer and return to UW/PC.
+you to "nuke" a transfer and return to UW/PC if something goes wrong.
 
 ASCII uploads will the send the contents of the text file to the remote
 machine, pausing 10 milliseconds between lines to allow the remote machine
@@ -214,7 +292,7 @@ abort the transfer - all other keys will be processed as normal.
 ASCII downloads consist of placing all incoming data from the remote host
 into the nominated file.  Pressing ESC will abort the transfer, and all
 other keys are processed as normal.  Usually you type in "cat filename" at
-the UNIX command line (bot don't press RETURN yet), start the ASCII download,
+the UNIX command line (but don't press RETURN yet), start the ASCII download,
 and then press RETURN to start it going.  Once it has finished you press
 ESC to abort the reception of characters.  ASCII capture (ALT-L) is similar
 to ASCII download, except ALT-L is used to abort the transfer.
@@ -234,7 +312,7 @@ allow you to transfer files between the remote machine and your PC using
 FTP-like commands.  This protocol will be more "aware" of the problems of
 performing multiple transfers when more than one window is active and will
 get around some other problems with transmission mediums that do not accept
-some characters - a character escape mode like Kermit will be available.
+some characters.
 
 6. USING UW/PC WITH OTHER PROGRAMS
 
@@ -269,16 +347,17 @@ optional, and their defaults follow:
 
 		This option allows you to change the hardware port address
 		to use for communication on the port specified by the "port"
-		configuration option.  This option must be specified in
-		decimal and should appear after the "port" option if that
+		configuration option.  This option's value can be specified
+		in decimal, octal (prefixed with '0') or hexadecimal (prefixed
+		with '0x') and should appear after the "port" option if that
 		is supplied.  The defaults for each of the four COM ports
 		are 0x3F8, 0x2F8, 0x3E8 and 0x2E8 respectively.
 
 	baud (default 2400)
 
 		The baud rate to use for transmission.  This can be
-		one of 110, 150, 300, 600, 1200, 2400, 4800, 9600 or
-		19200.
+		one of 110, 150, 300, 600, 1200, 2400, 4800, 9600,
+		19200, 38400 or 57600.
 
 	beep (default on)
 
@@ -332,6 +411,14 @@ optional, and their defaults follow:
 		use for the normal printing characters on the status line.
 		Setting this to 0 will make UW/PC use the default attribute
 		which depends on the screen mode in use.
+
+	cursor (default is underline)
+
+		This option specifies the shape of the cursor to be used on
+		the screen.  It can be underline, halfheight or fullheight.
+		This is very useful if you run UW/PC in a DOS window in
+		Windows 3.0 386 enhanced mode because the underline cursor
+		is very hard to see.
 
 	dial (default "ATDT")
 
@@ -389,6 +476,15 @@ optional, and their defaults follow:
 		default behaviour to be taken.  The strings cannot be
 		longer than 100 characters in length.
 
+	font (default "System")
+
+		Set the font facename to be used in the Windows 3.0 version
+		of UW/PC.  This can be up to 15 characters in length.
+
+	fontsize (default 8)
+
+		Set the size of the font to be used in the Windows 3.0 version.
+
 	init (default "ATZ^M~~~AT S7=45 S0=0 V1 X1^M~")
 
 		The modem initialisation string, delimited by double
@@ -401,6 +497,18 @@ optional, and their defaults follow:
 		The modem hangup string to use if after dropping the
 		DTR signal, the carrier is still present.  The string
 		cannot be longer than 100 characters in length.
+
+	mouse (default on)
+
+		If this configuration option is on then the mouse will
+		be enabled for use by the internal routines.  In particular,
+		cutting and pasting can be done using the mouse (as well
+		as the keyboard).  This option has no effect if no mouse
+		was found attached to the computer or it could not be
+		initialised properly.  Only Microsoft-compatible mice are
+		supported by UW/PC.  You may want to set this to "off" even
+		if you have a mouse because the mouse processing can slow
+		down UW/PC's screen updating considerably.
 
 	parity (default none)
 
@@ -433,7 +541,8 @@ optional, and their defaults follow:
 			%% - The character "%" itself.
 			%a - Expands to all currently active window numbers
 			     separated by spaces.  This will always occupy
-			     14 characters, padded with spaces.
+			     14 characters, padded with spaces.  The current
+			     window is highlighted.
 			%e - Terminal type of the current window, padded
 			     to fill 5 characters with spaces.
 			%h - Turn highlighting on (alternate attribute).
@@ -449,7 +558,7 @@ optional, and their defaults follow:
 			     or 5 spaces if no carrier is present.
 			%u - In protocol 0, gives two spaces and in protocol
 			     1, gives the string "UW".
-			%v - Vertical box drawing line in the status line.
+			%v - Draw a vertical line in the status line.
 			%w - Current window number ('0' if in protocol 0).
 			%0-%9 - These are used internally by UW/PC for
 			     showing block counts on file transfers, etc.
@@ -466,7 +575,8 @@ optional, and their defaults follow:
 		the given position using up only as many character positions
 		as necessary.  The rest of the line will be set to black
 		and white.  This is useful for very small status lines -
-		they can be squashed into a corner of the screen and ignored.
+		they can be squashed into a corner of the screen and
+		effectively ignored.
 
 	status (default on)
 
@@ -585,9 +695,8 @@ command, which should abort the UW server.
 9. FUTURE WORK
 
 In future, UW/PC will be extended with the following capabilities: A
-mini-FTP protocol, cutting and pasting between windows, scroll-back
-buffers, Ymodem file transfers in any window (and also protocol 0),
-XON/XOFF flow control and support for a subset of the UW protocol 2
-features which gives more control over window management.  Comments
-and suggestions are very welcome.  A major project that is underway
-is a port to Windows 3.0.
+mini-FTP protocol, scroll-back buffers, Ymodem file transfers in any
+window (and also protocol 0), XON/XOFF flow control and support for a
+subset of the UW protocol 2 features which gives more control over
+window management.  Comments and suggestions are very welcome.  A major
+project that is underway is a port to Windows 3.0.

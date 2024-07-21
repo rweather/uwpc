@@ -26,6 +26,8 @@
 //  -------  --------  --  --------------------------------------
 //    1.0    23/03/91  RW  Original Version of MAIN.CPP
 //    1.1    05/05/91  RW  Clean up and begin to add file transfers.
+//    1.2    08/06/91  RW  Add cut/paste and mouse support to UW/PC.
+//    1.3    27/09/91  RW  Add ALT-W for "next window" key.
 //
 //-------------------------------------------------------------------------
 
@@ -39,6 +41,8 @@
 #include "dialog.h"		// Dialog box routines.
 #include "files.h"		// File transfer routines.
 #include "comms.h"		// Communications routines.
+#include "clipbd.h"		// Clipboard handling routines.
+#include "mouse.h"		// Mouse handling routines.
 #include <dos.h>		// "delay" is defined here.
 #include <string.h>		// String handling routines.
 
@@ -55,7 +59,7 @@
 // Define the title to be displayed for this module.
 //
 char	*TitleString = 
-	"UW/PC version 2.00, Copyright (C) 1990-1991 Rhys Weatherley\n"
+	"UW/PC version 2.01, Copyright (C) 1990-1991 Rhys Weatherley\n"
 	"UW/PC comes with ABSOLUTELY NO WARRANTY; see the file COPYING for details.\n"
 	"This is free software, and you are welcome to redistribute it\n"
 	"under certain conditions; see the file COPYING for details.\n\n"
@@ -87,12 +91,16 @@ int	main	(int argc,char *argv[])
   HardwareScreen.scroll (0,SCRN_HEIGHT - 1,SCRN_WIDTH - 1,SCRN_HEIGHT - 1,0,
   		(UWConfig.DisableStatusLine ? 0x07 : ATTR(ATTR_STATUS)));
   HardwareScreen.cursor (0,4);
-  HardwareScreen.shape (CURS_UNDERLINE);
+  HardwareScreen.shape ((CursorShapes)UWConfig.CursorSize);
+  if (UWConfig.EnableMouse)
+    UWConfig.EnableMouse = InitMouse ();
   InitKeyboard ();
   InitTimers ();
   mesg = UWMaster.start ();
   TermTimers ();
   TermKeyboard ();
+  if (UWConfig.EnableMouse)
+    TermMouse ();
   HardwareScreen.term ();
   if (mesg)
     fprintf (stderr,"%s\n",mesg);
@@ -324,10 +332,15 @@ void	UWClient::defkey (int keypress)
       			break;
 #ifdef	DOOBERY
       case UWFTP_KEY:	UWMaster.sendstring (UWConfig.FtpString); break;
+      case MAIL_KEY:	UWMaster.sendstring (UWConfig.MailString); break;
 #endif
       case CAPTURE_KEY:	new AsciiEditBox (window,ASCII_CAPTURE);
       			break;
-      case PAUSE_KEY:	delay (500); break;
+      case PAUSE_KEY:	DELAY_FUNC (500); break;
+      case CUT_KEY:	new UWCutToClipboard (window); break;
+      case PASTE_KEY:	new UWPasteFromClipboard (window); break;
+      case NEXTWIN_KEY:	UWMaster.nextwindow (); break;
+      case STTY_KEY:	UWMaster.startclient ('T'); break;
       default:		if (keypress >= ALT_WIND_NUM (1) &&
       			    keypress <= ALT_WIND_NUM (7))
 			  UWMaster.top (ALT_GET_NUM (keypress));

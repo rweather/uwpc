@@ -26,13 +26,19 @@
 //  -------  --------  --  --------------------------------------
 //    1.0    21/03/91  RW  Original Version of DISPLAY.CPP
 //    1.1    05/05/91  RW  Clean up and start adding Win3 support.
+//    1.2    08/06/91  RW  Add support for cut and paste.
+//    1.3    28/10/91  RW  Clean up some of the Win3 support.
 //
 //-------------------------------------------------------------------------
 
 #include "display.h"		// Declarations for this module.
 #include "screen.h"		// Screen display handling routines.
 #include "config.h"		// Status positions defined here.
+#ifdef	UWPC_WINDOWS
+#include "win3.h"		// IDM_* declarations are here.
+#endif
 #include <mem.h>		// Memory accessing routines.
+#include <string.h>		// String handling routines.
 
 #pragma	warn	-par
 
@@ -42,54 +48,10 @@
 #else
 #define	CURSOR_OFF()	cursoroff()
 #define	CURSOR_ON()	cursoron()
+extern	HANDLE	hInstance;
+extern	int	UWFontHeight,UWFontWidth;
+extern	HFONT	hFont;
 #endif
-
-#ifdef	UWPC_WINDOWS
-
-//
-// Define the window style to use for creating display windows.
-//
-//	WS_CHILD	- child window to parent UW/PC window.
-//	WS_CLIPSIBLINGS	- clip to neighbours boundaries.
-//	WS_CAPTION	- has a title bar.
-//	WS_BORDER	- window has a normal (non-resizable) border.
-//
-#define	WINDOW_STYLE	(WS_CHILD | WS_CLIPSIBLINGS | WS_CAPTION | WS_BORDER)
-
-// Invalidate an area in the window for repainting //
-// This will also do a window update as well.	   //
-void	UWDisplay::invalidate (int x1,int y1,int x2,int y2)
-{
-  RECT rect;
-  rect.left = x1 * charwid;	// Get the region to be invalidated.
-  rect.top = y1 * charht;
-  rect.right = (x2 + 1) * charwid - 1;
-  rect.bottom = (y2 + 1) * charht - 1;
-  InvalidateRect (hWnd,&rect,0);// Invalidate the rectangle.
-  UpdateWindow (hWnd);		// Now update the invalidated area.
-} // UWDisplay::invalidate //
-
-// Turn the cursor off while performing some window update //
-void	UWDisplay::cursoroff (void)
-{
-  if (curson)
-    {
-      curson = 0;
-      invalidate (x,y,x,y);	// Redraw character at cursor position.
-    }
-} // UWDisplay::cursoroff //
-
-// Turn the cursor back on now //
-void	UWDisplay::cursoron (void)
-{
-  if (!curson)
-    {
-      curson = 1;
-      invalidate (x,y,x,y);	// Redraw character at cursor position.
-    }
-} // UWDisplay::cursoron //
-
-#endif	/* UWPC_WINDOWS */
 
 void	UWDisplay::show (int X,int Y,unsigned pair)
 {
@@ -100,7 +62,28 @@ void	UWDisplay::show (int X,int Y,unsigned pair)
   if (attop)
     HardwareScreen.draw (X,Y,pair);
 #else
-  invalidate (X,Y,X,Y);
+  // repaint (X,Y,X,Y);
+  HDC hDC;
+  unsigned char attr;
+  extern COLORREF WindowsAttributes[];
+
+  // Initialise the device context to perform drawing within //
+  hDC = GetDC (hWnd);
+  SetBkMode (hDC,OPAQUE);	// Fill in the background colour always.
+  SelectObject (hDC,hFont);	// Get the font to use for characters.
+
+  // Set the attribute colours to be used for the character draw //
+  attr = pair >> 8;
+  if (curson && y == Y && x == X) // Test for the cursor position.
+    attr = (attr << 4) | ((attr >> 4) & 0x0F);
+  SetBkColor (hDC,WindowsAttributes[(attr >> 4) & 7]);
+  SetTextColor (hDC,WindowsAttributes[attr & 7]);
+
+  // Draw the character that is to be shown //
+  TextOut (hDC,X * UWFontWidth,Y * UWFontHeight,(LPSTR)(&pair),1);
+
+  // Clean up the device context information //
+  ReleaseDC (hWnd,hDC);
 #endif
 } // UWDisplay::show //
 
@@ -220,7 +203,7 @@ void	UWDisplay::scroll (int x1,int y1,int x2,int y2,int lines,int attribute)
         HardwareScreen.scroll (x1,y1,x2,y2,lines,attribute);
     }
 #else
-  invalidate (x1,y1,x2,y2);	// Invalidate the scrolling area.
+  repaint (x1,y1,x2,y2);	// Invalidate the scrolling area.
 #endif
 } // UWDisplay::scroll //
 
@@ -238,9 +221,12 @@ UWDisplay::UWDisplay (int number)
   width = HardwareScreen.width;
   height = HardwareScreen.height - 1;
 #else
-  char title[2] = "N";
+  char title[10] = "UW/PC - N";
+  RECT rect;
+  int wid,ht,changed;
   width = 80;
   height = 24;
+  wNumber = number;	// Record the window number for later.
   hWnd = NULL;		// Mark the Windows 3.0 window as not present.
 #endif
   screen = new unsigned [width * height];
@@ -248,7 +234,7 @@ UWDisplay::UWDisplay (int number)
 #ifdef	UWPC_DOS
   attr = HardwareScreen.attributes[ATTR_NORMAL];
 #else
-  attr = 0x70;
+  attr = UWConfig.NewAttrs[ATTR_NORMAL];
 #endif
   scrollattr = attr;
   x = 0;
@@ -260,20 +246,79 @@ UWDisplay::UWDisplay (int number)
     {
 #ifdef	UWPC_WINDOWS
       // Create the Windows 3.0 window associated with this display object //
-      title[0] = number + '0';
-      hWnd = CreateWindow ("UWSESSION",		// Name of window class.
-      			   title,		// Window name.
-			   WINDOW_STYLE,	// Style of window to use.
+      title[8] = number + '0';
+      curson = 0;
+      hWnd = CreateWindow ((number == 0 ? "UWPCMainClass" : "UWPCSessClass"),
+      						// Name of window class.
+      			   (number == 0 ? "Unix Windows" : title),
+			   			// Window name.
+			   WS_OVERLAPPEDWINDOW,	// Style of window to use.
 			   CW_USEDEFAULT,	// Default initial position.
 			   CW_USEDEFAULT,
 			   CW_USEDEFAULT,	// Size of the window.
 			   CW_USEDEFAULT,
-			   NULL,		// Parent (*****)
+			   NULL,		// Parent (none)
 			   NULL,		// Menu handle - use default.
-			   NULL,		// Program instance (*****)
-			   NULL);		// Extra information.
+			   hInstance,		// Program instance.
+			   (LPSTR)this);	// Extra information.
+      if (!hWnd)
+        {
+	  width = 0;			// Creation failed.
+	  return;
+	}
 #endif
       clear ();
+#ifdef	UWPC_WINDOWS
+      // Adjust the "Functions" menu to contain the function keys //
+      int func;
+      HMENU hMenu;
+      char funckey[29];
+      hMenu = GetMenu (hWnd);
+      funckey[0] = 'F';		// Add skeleton "F&n \t" at start.
+      funckey[1] = '&';
+      funckey[3] = ' ';
+      funckey[4] = '\t';
+      funckey[25] = '.';	// Add "..." to end of string
+      funckey[26] = '.';	// for long function key definitions.
+      funckey[27] = '.';
+      funckey[28] = '\0';
+      for (func = IDM_F1;func <= IDM_F10;++func)
+        {
+	  if (func >= IDM_F10)
+	    strcpy (funckey,"F1&0\t");
+	   else
+	    funckey[2] = '1' + func - IDM_F1;
+	  if (UWConfig.FKeys[func - IDM_F1][0] == '\0')
+	    strcpy (funckey + 5,"<nothing>");
+	   else
+	    strncpy (funckey + 5,UWConfig.FKeys[func - IDM_F1],20);
+	  ModifyMenu (hMenu,func,MF_BYCOMMAND | MF_STRING,func,funckey);
+	} /* for */
+
+      // Resize the window to the required width and height.
+      GetWindowRect (hWnd,&rect);
+      wid = UWFontWidth * width + GetSystemMetrics (SM_CXFRAME) * 2;
+      ht  = UWFontHeight * height + GetSystemMetrics (SM_CYFRAME) * 2 +
+				    GetSystemMetrics (SM_CYCAPTION) +
+				    GetSystemMetrics (SM_CYMENU) + 2;
+      changed = 0;
+      if ((rect.right - rect.left + 1) > wid)
+        {
+	  rect.right = wid + rect.left - 1;
+	  changed = 1;
+	}
+      if ((rect.bottom - rect.top + 1) > ht)
+        {
+	  rect.bottom = ht + rect.top - 1;
+	  changed = 1;
+	}
+      if (changed)
+        MoveWindow (hWnd,rect.left,rect.top,rect.right - rect.left + 1,
+		    rect.bottom - rect.top + 1,0);
+      curson = 1;
+      ShowWindow (hWnd,SW_SHOW);
+      UpdateWindow (hWnd);
+#endif
     }
 } // UWDisplay::UWDisplay //
 
@@ -305,10 +350,13 @@ void	UWDisplay::top	(int bringup)
         HardwareScreen.line (0,y++,screen + offset,width);
       setcurs ();
       if (!HardwareScreen.dialogenabled)
-        HardwareScreen.shape (CURS_UNDERLINE);
+        HardwareScreen.shape ((CursorShapes)UWConfig.CursorSize);
 #else
       attop = 1;
-      BringWindowToTop (hWnd);	// Just bring to the top in Windows 3.0.
+      if (IsIconic (hWnd))
+        ShowWindow (hWnd,SW_RESTORE);	// De-iconify the window.
+       else
+        BringWindowToTop (hWnd);	// Bring to the top.
 #endif
     }
    else
@@ -409,7 +457,10 @@ void	UWDisplay::tab (int vt52wrap,int tabsize)
 void	UWDisplay::bell (void)
 {
 #ifdef	UWPC_DOS
-  HardwareScreen.bell ();
+  HardwareScreen.bell ();	// Call the BIOS for the DOS bell.
+#else
+  if (UWConfig.BeepEnable)
+    MessageBeep (0);		// Use this as the Windows 3.0 bell for now.
 #endif
 } // UWDisplay::bell //
 
@@ -476,8 +527,14 @@ void	UWDisplay::delline	(void)
 void	UWDisplay::inschar	(int ch)
 {
   int offset,xval;
+#ifdef	UWPC_DOS
+  int start;
+#endif
   unsigned pair,temp;
   offset = x + (y * width);
+#ifdef	UWPC_DOS
+  start = offset;
+#endif
   xval = x;
   if (ch != -1)
     pair = (ch & 255) | (attr << 8);
@@ -488,17 +545,16 @@ void	UWDisplay::inschar	(int ch)
       // Swap the insertion character with the screen character //
       temp = screen[offset];
       screen[offset] = pair;
-#ifdef	UWPC_DOS
-      if (attop)
-        HardwareScreen.draw (xval,y,pair);
-#endif
       pair = temp;
       ++offset;
       ++xval;
     }
 #ifdef	UWPC_WINDOWS
   if (x < (width - 1))
-    invalidate (x,y,width - 2,y);
+    repaint (x,y,width - 2,y);
+#else
+  if (attop)		// Redraw the screen line.
+    HardwareScreen.line (x,y,screen + start,width - x + 1);
 #endif
   if (ch != -1)
     send (ch);
@@ -509,26 +565,28 @@ void	UWDisplay::inschar	(int ch)
 void	UWDisplay::delchar	(int ch)
 {
   int offset,xval;
+#ifdef	UWPC_DOS
+  int start;
+#endif
   offset = x + (y * width);
+#ifdef	UWPC_DOS
+  start = offset;
+#endif
   xval = x;
   while (xval < (width - 1))
     {
       // Move the characters back one on the line //
       screen[offset] = screen[offset + 1];
-#ifdef	UWPC_DOS
-      if (attop)
-        HardwareScreen.draw (xval,y,screen[offset]);
-#endif
       ++offset;
       ++xval;
     }
   // Place the given character at the line's end //
   screen[offset] = (ch & 255) | (scrollattr << 8);
 #ifdef	UWPC_DOS
-  if (attop)
-    HardwareScreen.draw (width - 1,y,screen[offset]);
+  if (attop)		// Redraw the screen line after the deletion.
+    HardwareScreen.line (x,y,screen + start,width - x + 1);
 #else
-  invalidate (x,y,width - 1,y);
+  repaint (x,y,width - 1,y);
 #endif
   wrap52 = 0;
 } // UWDisplay::delchar //
@@ -629,24 +687,84 @@ void	UWDisplay::status	(char *str,int length)
 #endif
 } // UWDisplay::status //
 
-#ifdef	UWPC_WINDOWS
-
-// Process the messages for a display window.
-// This is a catch-all after the master routine
-// processes the messages.
-LONG	UWDisplay::mesgs (WORD message,WORD wParam,LONG lParam)
+// Mark a rectangle on the screen for cut-and-paste.
+// Two calls to this routine will remove the mark.
+void	UWDisplay::markcut (int x1,int y1,int x2,int y2)
 {
-  switch (message)
+  int temp,x,y,offset,nextline,length,start;
+  unsigned pair;
+  if (x1 > x2)
     {
-      case WM_PAINT:
-      		break;
-      case WM_CREATE:
-      		break;
-      case WM_DESTROY:
-      		break;
-      default:	return (DefWindowProc (hWnd,message,wParam,lParam));
+      temp = x1;
+      x1 = x2;
+      x2 = temp;
     }
-  return (NULL);
-} // UWDisplay::mesgs //
-
+  if (y1 > y2)
+    {
+      temp = y1;
+      y1 = y2;
+      y2 = temp;
+    }
+  offset = x1 + y1 * width;
+  start = offset;
+  length = x2 - x1 + 1;
+  nextline = width - length;
+  for (y = y1;y <= y2;++y)
+    {
+      for (x = x1;x <= x2;++x)
+        {
+	  // Flip the attribute colours in the screen pair //
+	  pair = screen[offset];
+	  screen[offset++] = (pair & 0x88FF) | ((pair & 0x0700) << 4) |
+	  	    		((pair & 0x7000) >> 4);
+	}
+#ifdef	UWPC_DOS
+      HardwareScreen.line (x1,y,screen + start,length);
 #endif
+      offset += nextline;
+      start += width;
+    }
+} // UWDisplay::markcut //
+
+// Copy screen data into a clipboard buffer.  The
+// length of the written data is returned.
+int	UWDisplay::copycut (int x1,int y1,int x2,int y2,char *buffer)
+{
+  int temp,x,y,offset,nextline,length;
+  if (x1 > x2)
+    {
+      temp = x1;
+      x1 = x2;
+      x2 = temp;
+    }
+  if (y1 > y2)
+    {
+      temp = y1;
+      y1 = y2;
+      y2 = temp;
+    }
+  offset = x1 + y1 * width;
+  nextline = width - (x2 - x1 + 1);
+  length = 0;
+  for (y = y1;y <= y2;++y)
+    {
+      for (x = x1;x <= x2;++x)
+        {
+	  *buffer++ = screen[offset++] & 255;
+	  ++length;
+	}
+      while (length > 0 && *(buffer - 1) == ' ')
+        {
+	  // Move back to eliminate trailing spaces on the line //
+	  --length;
+	  --buffer;
+	}
+      if (y != y2)
+        {
+	  *buffer++ = '\r';	// Paste ^M at end of each line except last.
+	  ++length;
+	}
+      offset += nextline;
+    }
+  return (length);		// Return the length of the paste buffer.
+} // UWDisplay::copycut //

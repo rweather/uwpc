@@ -25,8 +25,13 @@
 //  Version  DD/MM/YY  By  Description
 //  -------  --------  --  --------------------------------------
 //    1.0    23/03/91  RW  Original Version of CONFIG.CPP
+//    1.1    30/10/91  RW  Modify to make it work with Windows 3.0
 //
 //-------------------------------------------------------------------------
+
+#define	NOWINMESSAGES	1	// Don't include some windows.h for extra space
+#define NOWINSTYLES	1	// otherwise it won't compile under BCC -W.
+#define	NOGDI		1
 
 #include "config.h"		// Declarations for this module.
 #include "comms.h"		// Communications routines.
@@ -38,11 +43,48 @@
 #include <ctype.h>		// Character type macros.
 #include <stdlib.h>		// "exit" was defined here.
 #include <alloc.h>		// Memory allocation routines.
+#include <errno.h>		// Error message declarations.
 
 //
 // Define the main UW/PC configuration object.
 //
 UWConfiguration	UWConfig;
+
+//
+// Global information for this module.
+//
+#ifdef	UWPC_WINDOWS
+static	CATCHBUF	CatchBuf;
+#define	SPRINTF		wsprintf
+#define	STRING		LPSTR
+#else
+#define	SPRINTF		sprintf
+#define	STRING		char *
+#endif
+static	char		ErrorBuffer[256];
+
+//
+// Report an error during configuration.  If "perr" is TRUE then
+// use the message for the current "perror" error message.
+//
+static	void	ConfigError (char *msg,int perr=0)
+{
+#ifdef	UWPC_DOS
+  // Report DOS configuration errors on the standard output //
+  if (!perr)
+    fprintf (stderr,"%s\n",msg);
+   else
+    perror (msg);
+  exit (1);		// Abort the program completely.
+#else
+  // Report Windows 3.0 configuration errors in message boxes //
+  if (!perr)
+    MessageBox (NULL,msg,NULL,MB_OK | MB_ICONEXCLAMATION);
+   else
+    MessageBox (NULL,sys_errlist[errno],msg,MB_OK | MB_ICONEXCLAMATION);
+  Throw (CatchBuf,1);	// Throw back to the "doconfig" function.
+#endif
+} /* ConfigError */
 
 // Setup the default configuration.
 UWConfiguration::UWConfiguration (void)
@@ -63,6 +105,7 @@ UWConfiguration::UWConfiguration (void)
   strcpy (DialString,"ATDT");
   strcpy (CommandString,"uw^M");
   strcpy (FtpString,"uwftp^M");
+  strcpy (MailString,"uwmail^M");
   for (key = 0;key < 10;++key)
     FKeys[key][0] = '\0';
   strcpy (StatusFormat," ALT-Z for Help %v %e %v %p %v %u %v Windows: %a");
@@ -73,20 +116,26 @@ UWConfiguration::UWConfiguration (void)
   PopUpNewWindow = 0;
   DisableUW = 0;
   strcpy (ZModemCommand,"DSZ");
+  EnableMouse = 1;
+  MailBoxName[0] = '\0';		// Use the default system mailbox.
+  Password[0] = '\0';			// No password to start with.
+  CursorSize = CURS_UNDERLINE;
+  strcpy (FontFace,"System");		// Font information for Windows 3.0.
+  FontHeight = 8;
 } // UWConfigration::UWConfiguration //
 
 // Abort the configuration with an error.
 void	UWConfiguration::error (char *msg)
 {
-  fprintf (stderr,"Configuration line %d: %s\n",linenum,msg);
-  exit (1);
+  SPRINTF (ErrorBuffer,"Configuration line %d: %s",linenum,(STRING)msg);
+  ConfigError (ErrorBuffer);
 } // UWConfiguration::error //
 
 // Abort the configuration with an "illegal" config message.
 void	UWConfiguration::illegal (char *msg)
 {
-  fprintf (stderr,"Configuration line %d: Illegal %s\n",linenum,msg);
-  exit (1);
+  SPRINTF (ErrorBuffer,"Configuration line %d: Illegal %s",linenum,(STRING)msg);
+  ConfigError (ErrorBuffer);
 } // UWConfiguration::illegal //
 
 // Load a new terminal type from the specified filename.
@@ -98,35 +147,36 @@ void	*UWConfiguration::LoadTerminal (char *filename)
 
   // Open the terminal description file for reading //
   if ((file = fopen (filename,"rb")) == NULL)
-    {
-      perror (filename);
-      exit (1);
-    }
+    ConfigError (filename,1);	// Report a "perror".
 
   // Get the length of the file and return to the start //
   if (fseek (file,0L,SEEK_END) ||
       (filesize = ftell (file)) == -1L ||
       fseek (file,0L,SEEK_SET))
     {
-      perror (filename);
+      int err;
+      err = errno;
       fclose (file);
-      exit (1);
+      errno = err;
+      ConfigError (filename);
     }
 
   // Allocate some memory for the terminal description //
   if (filesize > 17000L ||
       (desc = (void *)malloc ((size_t)filesize)) == NULL)
     {
-      fprintf (stderr,"%s : Not enough memory\n",filename);
-      exit (1);
+      SPRINTF (ErrorBuffer,"%s : Not enough memory",(STRING)filename);
+      ConfigError (ErrorBuffer);
     }
 
   // Read the contents of the terminal description //
   if (fread (desc,1,(size_t)filesize,file) != ((size_t)filesize))
     {
-      perror (filename);
+      int err;
+      err = errno;
       fclose (file);
-      exit (1);
+      errno = err;
+      ConfigError (filename);
     }
 
   // Close the file and return the loaded terminal description //
@@ -168,7 +218,8 @@ unsigned char far *UWConfiguration::FindTerminal (char *type)
 // Process a configuration line.
 void	UWConfiguration::processline (char *line)
 {
-  int index,number,type;
+  int index,type;
+  unsigned number;
   static char ConfigName[CONFIG_NAME_LEN + 1];
   static char ConfigParam[STR_LEN];
   char *errmsg="Illegal configuration command format";
@@ -200,7 +251,7 @@ void	UWConfiguration::processline (char *line)
 	  if (isdigit (*line))
 	    number += *line - '0';
 	   else
-	    number += (*line - 'A' + 10) & 0x0F;
+	    number += ((*line & 0x5F) - 'A' + 10);
 	  ++line;
 	}
       type = TYPE_NUMBER;
@@ -264,11 +315,12 @@ void	UWConfiguration::processline (char *line)
     }
    else if (!stricmp (ConfigName,"baud") && type == TYPE_NUMBER)
     {
-      static int baudrates[] = {110,150,300,600,1200,2400,4800,9600,19200};
+      static unsigned baudrates[] = {110,150,300,600,1200,2400,
+      				     4800,9600,19200,38400,57600};
       int baud=0;
-      while (baud < 9 && number != baudrates[baud])
+      while (baud < 11 && number != baudrates[baud])
         ++baud;
-      if (baud < 9)
+      if (baud < 11)
         ComParams = (ComParams & ~BAUD_RATE) | baud;
        else
         illegal ("baud rate");
@@ -304,6 +356,18 @@ void	UWConfiguration::processline (char *line)
        else
         illegal ("number of data bits");
     }
+   else if (!stricmp (ConfigName,"font") && type == TYPE_STRING)
+    {
+      if (strlen (ConfigParam) >= FONT_STR_LEN)
+        illegal ("font facename - too long");
+      strcpy (FontFace,ConfigParam);
+    }
+   else if (!stricmp (ConfigName,"fontsize") && type == TYPE_NUMBER)
+    {
+      if (number < 1 || number > 50)
+        illegal ("font height - must be between 1 and 50");
+      FontHeight = number;
+    }
    else if (!stricmp (ConfigName,"init") && type == TYPE_STRING)
     {
       strcpy (InitString,ConfigParam);
@@ -325,6 +389,17 @@ void	UWConfiguration::processline (char *line)
         DisableUW = 0;
        else
         illegal ("value: must be 'yes' or 'no'");
+    }
+   else if (!stricmp (ConfigName,"cursor") && type == TYPE_IDENT)
+    {
+      if (!stricmp (ConfigParam,"underline"))
+        CursorSize = CURS_UNDERLINE;
+       else if (!stricmp (ConfigParam,"halfheight"))
+        CursorSize = CURS_HALF_HEIGHT;
+       else if (!stricmp (ConfigParam,"fullheight"))
+        CursorSize = CURS_FULL_HEIGHT;
+       else
+        illegal ("value: must be 'underline', 'halfheight' or 'fullheight'");
     }
    else if (!stricmp (ConfigName,"hangup") && type == TYPE_STRING)
     {
@@ -388,6 +463,15 @@ void	UWConfiguration::processline (char *line)
        else
         illegal ("value: must be 'on' or 'off'");
     }
+   else if (!stricmp (ConfigName,"mouse") && type == TYPE_IDENT)
+    {
+      if (!stricmp (ConfigParam,"on"))
+        EnableMouse = 1;
+       else if (!stricmp (ConfigParam,"off"))
+        EnableMouse = 0;
+       else
+        illegal ("value: must be 'on' or 'off'");
+    }
    else if (!stricmp (ConfigName,"swapbs") && type == TYPE_IDENT)
     {
       if (!stricmp (ConfigParam,"on"))
@@ -408,6 +492,10 @@ void	UWConfiguration::processline (char *line)
     }
    else if (!stricmp (ConfigName,"sformat") && type == TYPE_STRING)
     strcpy (StatusFormat,ConfigParam);
+   else if (!stricmp (ConfigName,"mailbox") && type == TYPE_STRING)
+    strcpy (MailBoxName,ConfigParam);
+   else if (!stricmp (ConfigName,"password") && type == TYPE_STRING)
+    strcpy (Password,ConfigParam);
    else if (!stricmp (ConfigName,"sposn") && type == TYPE_IDENT)
     {
       if (!stricmp (ConfigParam,"left"))
@@ -433,6 +521,8 @@ void	UWConfiguration::processline (char *line)
     strcpy (CommandString,ConfigParam);
    else if (!stricmp (ConfigName,"uwftp") && type == TYPE_STRING)
     strcpy (FtpString,ConfigParam);
+   else if (!stricmp (ConfigName,"uwmail") && type == TYPE_STRING)
+    strcpy (MailString,ConfigParam);
    else if (!stricmp (ConfigName,"zmodem") && type == TYPE_STRING)
     strcpy (ZModemCommand,ConfigParam);
    else if (!stricmp (ConfigName,"f1") && type == TYPE_STRING)
@@ -470,7 +560,7 @@ void	UWConfiguration::processline (char *line)
 } // UWConfiguration::processline //
 
 // Do the configuration for UW/PC.
-void	UWConfiguration::doconfig (char *argv0)
+int	UWConfiguration::doconfig (char *argv0)
 {
   static char *BaudRates[] = {"110","150","300","600","1200","2400",
 			      "4800","9600","19200","38400","57600",
@@ -478,7 +568,17 @@ void	UWConfiguration::doconfig (char *argv0)
   static char Parities[] = "NOE?";
   static char ConfigBuffer[BUFSIZ];
   char *FileName = "UW.CFG";
-  FILE *file;
+  FILE *file=NULL;
+
+#ifdef	UWPC_WINDOWS
+  // Catch any errors that occur during Windows 3.0 configuration.
+  if (Catch (CatchBuf))
+    {
+      if (file != NULL)
+        fclose (file);
+      return (0);		// Configuration failed.
+    } /* if */
+#endif
 
   // Find the configuration file (if present).
   strcpy (ConfigBuffer,FileName);
@@ -509,9 +609,9 @@ void	UWConfiguration::doconfig (char *argv0)
     StripHighBit = 1;
 
   // Setup the string version of the COM parameters //
-  sprintf (DeviceParameters,"COM%d %s %c-%c-%c",
+  SPRINTF (DeviceParameters,"COM%d %s %c-%c-%c",
 		ComPort,
-		BaudRates[ComParams & BAUD_RATE],
+		(STRING)(BaudRates[ComParams & BAUD_RATE]),
 		Parities[(ComParams & PARITY_GET) >> 6],
 		((ComParams & BITS_8) ? '8' : '7'),
 		((ComParams & STOP_2) ? '2' : '1'));
@@ -519,4 +619,18 @@ void	UWConfiguration::doconfig (char *argv0)
   // Set the default Protocol 0 terminal type if not set already //
   if (P0TermType == 0)
     P0TermType = P1TermType;
+
+#ifdef	UWPC_WINDOWS
+  // Set the screen attributes for use by the Windows 3.0 version //
+  static unsigned char colrattrs[NUM_ATTRS] = {0x70,0x07,0x07,0x07,0x07};
+  int attr;
+  for (attr = 0;attr < 5;++attr)
+    {
+      // If the attribute isn't set yet, then set it //
+      if (!NewAttrs[attr])
+        NewAttrs[attr] = colrattrs[attr];
+    } /* for */
+#endif	/* UWPC_WINDOWS */
+
+  return (1);			// Configuration succeeded.
 } // UWConfiguration::doconfig //

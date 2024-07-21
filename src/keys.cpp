@@ -109,10 +109,12 @@ int	GetKeyPress (void)
         return (key & 255);
        else if (key == 0x300)	/* CTRL-@ */
         return (0);
-       else if (key == 0)		/* CTRL-BREAK */
+       else if (key == 0)	/* CTRL-BREAK */
         return (BREAK_KEY);
        else if (key == 0x7500)	/* CTRL-END */
         return (BREAK_KEY);
+       else if (key == 0x8100)	/* ALT-0 -> ALT-W */
+        return (NEXTWIN_KEY);
        else if (key == 0x5300)
         return (0x7F);		/* Delete key => ASCII 'DEL' character */
        else if (key >= 0x3B00 && key <= 0x4400 &&

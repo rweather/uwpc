@@ -33,6 +33,22 @@
 #include "config.h"		// Configuration routines
 #include "uw.h"			// Main UW protocol declarations
 #include "comms.h"		// Direct serial comms routines
+#include "clipbd.h"		// Clipboard processing routines
+#include "mouse.h"		// Mouse handling routines
+
+#pragma	warn	-par
+
+// Process the mouse events in the default way by
+// implementing a cut-and-paste operation.
+void	UWTerminal::mouse (int x,int y,int buttons)
+{
+#ifdef	UWPC_DOS
+  if (buttons & MOUSE_LEFT)			// Check for start of cut.
+    new UWCutToClipboard (window,1,x,y);
+   else if (buttons & MOUSE_RIGHT)		// Check for a paste.
+    new UWPasteFromClipboard (window);
+#endif
+} // UWTerminal::mouse //
 
 // Process a user's keypress.  This will only be called
 // if this client is using the top-most displayed window.

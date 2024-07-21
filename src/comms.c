@@ -35,6 +35,7 @@
       1.3    17/03/91  RW  Create 'comfix' to fix DOS shell-out bug.
       1.4    21/03/91  RW  Fix minor problem with sign extension in comreceive.
       1.5    22/03/91  RW  Fix COM port addressing & add COM3/COM4 support.
+      1.6    31/10/91  RW  Add some more stuff for Windows 3.0 support.
 
 -----------------------------------------------------------------------------*/
 
@@ -84,6 +85,7 @@ struct	IntBuf	{
 		  int	statport,dataport;
 		  int	testbit;
 		  int	oldier,oldmcr,oldlcr,oldbaud;
+		  int	checkloss;
 		};
 
 static	struct	IntBuf	Com1Buf,Com2Buf;
@@ -336,7 +338,7 @@ int	port;
 }
 
 /* Enable a COM port for Interrupt Driven I/O by this module */
-void	_Cdecl	comenable(port)
+int	_Cdecl	comenable(port)
 int	port;
 {
   char ch;
@@ -352,6 +354,7 @@ int	port;
 		Com1Buf.dataport = dataport;
 		Com1Buf.statport = Com1Buf.dataport + COM_STAT;
 		Com1Buf.testbit = 0;
+		Com1Buf.checkloss = 0;	/* Don't check for carrier loss */
 
 		doenable (dataport);	/* Setup the regs */
 
@@ -376,6 +379,7 @@ int	port;
 		Com2Buf.dataport = dataport;
 		Com2Buf.statport = Com2Buf.dataport + COM_STAT;
 		Com2Buf.testbit = 0;
+		Com1Buf.checkloss = 0;	/* Don't check for carrier loss */
 
 		doenable (dataport);	/* Setup the regs */
 
@@ -391,8 +395,9 @@ int	port;
 		ch &= (0xFF^INT_MASK_2);/* Reset mask for COM2 */
 		outportb(PIC_MASK,ch);	/* Send it to the 8259A */
 		break;
-      default:	break;
+      default:	return (0);
     }
+  return (1);
 }
 
 /* Save the current setting of a COM port to be restored later */
@@ -584,6 +589,42 @@ int	port;
       default: return 0;
     }
 }
+
+/* Enable or disable the detection of carrier loss */
+void	_Cdecl	comloss	(port,enable)
+int	port,enable;
+{
+  switch (port)
+    {
+      case 1: case 3:
+      		Com1Buf.checkloss = enable;
+		break;
+      case 2: case 4:
+      		Com2Buf.checkloss = enable;
+		break;
+      default:	break;
+    } /* switch */
+} /* comloss */
+
+/* Test if the last transmitted character could not be sent because */
+/* the carrier has been lost.  This is mainly for Windows 3.0       */
+int	_Cdecl	comlost (port)
+int	port;
+{
+  switch (port)
+    {
+      case 1: case 3:
+      		if (Com1Buf.checkloss && !comcarrier (port))
+		  return (1);		/* Carrier has been lost */
+		break;
+      case 2: case 4:
+      		if (Com2Buf.checkloss && !comcarrier (port))
+		  return (1);		/* Carrier has been lost */
+		break;
+      default:	break;
+    } /* switch */
+  return (0);				/* Carrier is assumed still present */
+} /* comlost */
 
 /* Test to see if the DSR (Data Set Ready) signal is present */
 int	_Cdecl	comdsr (port)

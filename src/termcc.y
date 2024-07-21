@@ -26,6 +26,7 @@
    -------  --------  --  --------------------------------------
      1.0    23/03/91  RW  Original Version of TERMCC.Y
      1.1    25/05/91  RW  Add more instructions to support ANSI
+     1.2    25/07/91  RW  Added the "client" instruction
 
 -------------------------------------------------------------------------*/
 
@@ -38,6 +39,7 @@
 %token CMD_GETXY CMD_GETX CMD_GETY CMD_SCRLUP CMD_SCRLDN CMD_SET CMD_RESET
 %token CMD_TEST CMD_NAME CMD_KEY CMD_ENDKEYS CMD_RESARR CMD_GETARG CMD_GETA
 %token CMD_DEC CMD_SHIFT CMD_SETC CMD_SAVEATTR CMD_RESTATTR CMD_INSBLANK
+%token CMD_CLIENT
 %token NUMBER STRING IDENT COMMA SEMI COLON VAL_WIDTH VAL_HEIGHT
 
 /* YYSTYPE is the semantic type for non-terminals and terminals */
@@ -215,6 +217,8 @@ cmd:	  CMD_SEND
 		{ genbyte (OP_RESTATTR); }
 	| CMD_INSBLANK
 		{ genbyte (OP_INSBLANK); }
+	| CMD_CLIENT
+		{ genbyte (OP_CLIENT); }
 	| IDENT COLON
 		{ addposn ($1,OutBufPosn); }
 	| error

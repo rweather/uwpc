@@ -94,6 +94,10 @@ public:
 	// Returns NULL or an error message.
 	char	*start	(void);
 
+	// Pass a keypress from outside the UW protocol master.
+	// This is only called in the Windows 3.0 version.
+	void	sendkey	(int wind,int key);
+
 	// Force the exit from Protocol 1 or higher, and a
 	// return to Protocol 0 (ignored in Protocol 0).
 	void	exit	(void);
@@ -128,6 +132,9 @@ public:
 	// the current window).
 	void	top	(int number);
 
+	// Cycle around to the next window in Protocol 1/2.
+	void	nextwindow (void);
+
 	// Jump out to a DOS shell, and fix everything on return.
 	// Optionally execute a command in DOS.
 	void	jumpdos	(char *cmdline=0);
@@ -142,6 +149,13 @@ public:
 	// Exit protocol 1 and send a modem line break.
 	void	sendbreak (void);
 
+	// Start a client service that was requested by a
+	// "^[|" escape sequence from the remote host.
+	void	startclient (int ch);
+
+	// Minimize all windows except the given window.  This only
+	// has an effect in the Windows 3.0 version.
+	void	minall	(int wind);
 };
 
 //

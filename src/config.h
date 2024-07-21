@@ -47,6 +47,7 @@
 //
 #define	STR_LEN		101
 #define	MAX_DESCS	5
+#define	FONT_STR_LEN	16
 class	UWConfiguration {
 
 private:
@@ -96,10 +97,17 @@ public:
 	int	PopUpNewWindow;		// Non-zero to pop-up new windows.
 	int	DisableUW;		// Non-zero to disable server.
 	char	ZModemCommand[STR_LEN];	// Name of the ZModem program.
+	int	EnableMouse;		// Non-zero if mouse is enabled.
+	char	MailBoxName[STR_LEN];	// Name of the user's mailbox.
+	char	Password[STR_LEN];	// Password for login client.
+	char	MailString[STR_LEN];	// Name of the "uwmail" command.
+	int	CursorSize;		// Shape of the screen cursor.
+	char	FontFace[FONT_STR_LEN];	// Name of font for Windows 3.0.
+	int	FontHeight;		// Height of the font for Windows 3.0.
 
 	UWConfiguration (void);		// Set the defaults.
 
-	void	doconfig (char *argv0);	// Do the configuration.
+	int	doconfig (char *argv0);	// Do the configuration.
 
 };
 

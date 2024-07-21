@@ -133,6 +133,14 @@ screen begins, and "keys" indicates where the decoding of special keycodes
 (for example terminal function keys) begins.  Without these labels, UW/PC
 cannot process the terminal description properly.
 
+There is one special escape sequence that EVERY terminal type MUST support:
+"ESC |".  This will be used by UW/PC together with some of the upcoming
+enhancements to UW/PC.  The handling for this escape sequence is to use
+"getch" to retrieve the next character after the '|' and then to execute the
+"client" instruction.  If a terminal description does not handle this escape
+sequence in this way, then the special clients cannot be activated in
+windows of that terminal type.
+
 	add	- Adds the instruction's argument to the accumulator.
 		  The argument can be numeric, "width" or "height".
 
@@ -148,6 +156,10 @@ cannot process the terminal description properly.
 
 	clear	- Clear the entire screen to the current scrolling attribute.
 		  The cursor is not moved from its current position.
+
+	client	- This should be executed for the escape sequence ESC '|'.
+		  UW/PC uses this for some of its specialised clients such
+		  as the upcoming mail tool uwmail.
 
 	clreol	- Clear to the end of the current line in the current
 		  scrolling attribute.
@@ -189,7 +201,7 @@ cannot process the terminal description properly.
 		  main UW/PC program needs to be modified to recognise the
 		  escape sequences.  It is suggested that you do not use
 		  this because it may change in different versions of the
-		  program.
+		  program, but is handy for "quick hacks".
 
 	geta	- Gets an argument from the argument array.  This instruction's
 		  first argument (1..8) specifies the argument to get and its
@@ -263,7 +275,7 @@ cannot process the terminal description properly.
 		  this to define the characters to send for arrow and function
 		  keys in a terminal emulation.  It is assumed that the
 		  label "keys" is followed by zero or more "key" instructions
-		  and terminated with a "endkeys" instruction so that UW/PC
+		  and terminated with an "endkeys" instruction so that UW/PC
 		  can find the key definitions.  No other instructions must
 		  appear in the "keys" section otherwise strange things may
 		  happen.
@@ -401,3 +413,7 @@ cannot process the terminal description properly.
 		  The comparator is set to a non-zero value if the flag bit
 		  is set, and zero if it is reset.  The comparator can then
 		  be tested with "je" (for reset) and "jne" (for set).
+
+You should look at the standard VT52, ADM31 and ANSI terminal types that come
+with the UW/PC source code for more information on how to write terminal
+descriptions.  Please report any bugs or enhancements to the author.

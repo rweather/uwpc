@@ -61,4 +61,57 @@
 #define P1_MF_SETPCL	0004	/*	set new protocol */
 #define	P1_MF_EXIT	0007	/*	exit */
 
+/* Protocol 2 specific definitions and macros */
+
+#define	P2_FN_WOPT	0040	/*	communicate window options */
+
+/* Window option declarations */
+
+#define	WOG_END		0	/* end of options */
+#define	WOG_VIS		1	/* visibility */
+#define	WOG_TYPE	2	/* window emulation type */
+#define	WOG_POS		3	/* window position on screen */
+#define	WOG_TITLE	4	/* window title */
+#define	WOG_SIZE	5	/* window size (in pixels) */
+#define	WOG_6		6	/* reserved */
+#define	WOG_7		7	/* reserved */
+
+#define	WOTTY_SIZE	8	/* (row,col) terminal size */
+#define	WOTTY_FONTSZ	9	/* font size index */
+#define	WOTTY_MOUSE	10	/* mouse interpretation */
+#define	WOTTY_BELL	11	/* audible, visible bell */
+#define	WOTTY_CURSOR	12	/* cursor shape */
+
+/* Window option management commands */
+
+#define	WOC_SET		0	/* change value of option */
+#define	WOC_INQUIRE	2	/* ask about current option value */
+#define	WOC_DO		4	/* do report changes to option */
+#define	WOC_DONT	5	/* don't report changes to option */
+#define	WOC_WILL	6	/* will report changes to option */
+#define	WOC_WONT	7	/* won't report changes to option */
+
+/* Window option encoding and decoding declarations */
+
+#define	WONUM_MIN	 1		/* minimum option number */
+#define	WONUM_GENERIC	 7		/* maximum generic option number */
+#define	WONUM_SHORT	 14		/* maximum short option number */
+#define	WONUM_MAX	 31		/* maximum option number */
+#define	WONUM_MASK	 (017<<3)	/* mask for option extraction */
+#define	WONUM_SENCODE(n) (((n)&017)<<3)	/* short encoding function */
+#define	WONUM_SDECODE(c) (((c)>>3)&017)	/* short decoding function */
+#define	WONUM_LPREFIX	 (017<<3)	/* long encoding prefix */
+#define	WONUM_LENCODE(n) ((n)+' ')	/* long encoding function */
+#define	WONUM_LDECODE(c) (((c)&0177)-' ') /* long decoding function */
+
+/* Define the standard UW terminal types */
+
+#define	UWT_ADM31	0	/* ADM-31 cursor-addressible terminal */
+#define	UWT_VT52	1	/* VT52 cursor-addressible terminal */
+#define	UWT_ANSI	2	/* ANSI-compatible terminal */
+#define	UWT_TEK4010	3	/* Tektronix 4010 graphics terminal */
+#define	UWT_FTP		4	/* File transfer window */
+#define	UWT_PRINT	5	/* Output to printer */
+#define	UWT_PLOT	6	/* Plot window */
+
 #endif	/* __UWPROTO_H__ */

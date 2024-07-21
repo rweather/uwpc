@@ -34,6 +34,8 @@
 //    1.0    23/03/91  RW  Original Version of UW.CPP
 //    1.1    05/05/91  RW  Many bug fixes and cleanups.
 //    1.2    26/05/91  RW  Add command-line to "jumpdos".
+//    1.3    08/06/91  RW  Add mouse support to the clients.
+//    1.4    31/10/91  RW  Port this module to Windows 3.0.
 //
 //-------------------------------------------------------------------------
 
@@ -44,11 +46,18 @@
 #include "uwproto.h"		// UW protocol constants.
 #include "display.h"		// UW client display routines.
 #include "keys.h"		// Keyboard handling routines.
+#ifdef	UWPC_DOS
 #include "screen.h"		// Screen handling routines.
 #include "timer.h"		// System timer handlers.
+#include "mouse.h"		// Mouse accessing routines.
+#else	/* UWPC_DOS */
+#include "win3.h"		// Windows 3.0 resource definitions.
+#endif	/* UWPC_DOS */
 #include <stdio.h>		// "sprintf" is defined here.
 #include <string.h>		// String handling routines.
 #include <dos.h>		// "delay" is defined here.
+
+#pragma	warn	-par
 
 //
 // Define the master object for handling the UW protocol.
@@ -62,10 +71,14 @@ UWProtocol	UWMaster;
 #define XON	021
 #define	XOFF	023
 
+#ifdef	UWPC_DOS
+
 //
 // Define the title string to be displayed on startup.
 //
 extern	char	*TitleString;
+
+#endif	/* UWPC_DOS */
 
 //
 // Define the class to use when creating new terminals.
@@ -188,10 +201,26 @@ void	UWProtocol::fromhost (int ch)
 		if (clients[arg] != 0 && arg > 0)
 		  OutputWindow = arg;
 	  	break;
+          case P2_FN_WOPT:		// Process Protocol 2 window options.
+	  	if (protocol < 2)	// Ignore options in Protocol 0/1.
+		  break;
+	  	break;
 	  case P1_FN_META:
 	  	if (protocol < 1)	// Ignore command in Protocol 0.
 		  break;
-	  	gotmeta = 1;		// Enable the next meta bit.
+		if (protocol > 1 && arg)
+		  {
+		    // Extract the meta encoding in Protocol 2 //
+		    switch (arg)
+		      {
+		        case P1_CC_IAC:  remote (IAC  | 0x80); break;
+		        case P1_CC_XON:  remote (XON  | 0x80); break;
+		        case P1_CC_XOFF: remote (XOFF | 0x80); break;
+		        default:	 break;
+		      } /* switch */
+		  } /* then */
+		 else
+	  	  gotmeta = 1;		// Enable the next meta bit.
 	  	break;
 	  case P1_FN_CTLCH:
 	  	if (protocol < 1)	// Ignore command in Protocol 0.
@@ -254,6 +283,7 @@ void	UWProtocol::fromhost (int ch)
 // Display a new status line on the screen bottom
 void	UWProtocol::status (void)
 {
+#ifdef	UWPC_DOS		// Windows 3.0 doesn't have status lines.
   static char Buffer[STR_LEN + 20];
   static char TermName[6];
   int len,window,posn,startposn,attrbytes,sposn;
@@ -385,6 +415,7 @@ void	UWProtocol::status (void)
   Buffer[posn] = '\0';
   displays[0] -> status (Buffer,strlen (Buffer) - attrbytes);
   UWConfig.StatusPosn = sposn;		// Restore the status position.
+#endif	/* UWPC_DOS */
 } // UWProtocol::status //
 
 #define	SLICE_SIZE	5
@@ -395,8 +426,15 @@ void	UWProtocol::status (void)
 // Returns NULL or an error message.
 char	*UWProtocol::start (void)
 {
-  int ch,window,carrier,newcarrier,lasttime,lastonline,slice;
+  int ch,window,carrier,newcarrier,slice;
   char *str;
+#ifdef	UWPC_WINDOWS
+  MSG msg;
+  extern HWND hMainWnd;
+  extern HANDLE hAccTable;
+#else
+  int lasttime,lastonline;
+#endif	/* UWPC_WINDOWS */
   terminate = 0;
   exitmulti = 0;
   protocol = 0;
@@ -421,12 +459,17 @@ char	*UWProtocol::start (void)
   if (clients[0] -> isaterminal)
     ((UWTermDesc *)clients[0]) -> setemul (UWConfig.P0TermType);
   displays[0] -> top (1);
-  carrier = comcarrier (UWConfig.ComPort);
+#ifdef	UWPC_DOS
   lasttime = CurrentTime;
   lastonline = OnlineTime;
   status ();		// Draw the status line
+#else	/* UWPC_DOS */
+  hMainWnd = displays[0] -> hWnd;	// Record the main window's handle.
+#endif	/* UWPC_DOS */
 
+#ifdef	UWPC_DOS
   // Display the title string in the window just created.
+  HideMouse ();
   str = TitleString;
   while (*str)
     {
@@ -439,16 +482,32 @@ char	*UWProtocol::start (void)
        else
         displays[0] -> send (*str++);
     }
+  ShowMouse ();
+#endif	/* UWPC_DOS */
 
   // Enable the communications port
   comenable (UWConfig.ComPort);
   comparams (UWConfig.ComPort,UWConfig.ComParams);
 
   // Send the initialisation string to the modem.
+#ifdef	UWPC_DOS
+  // Do some checks under DOS, but always send under Windows 3.0 //
   if (UWConfig.CarrierInit || !comcarrier (UWConfig.ComPort))
+#else	/* UWPC_DOS */
+  // Display a "I am doing something" message //
+  if (UWConfig.InitString[0] != '\0')
+    {
+      str = "Initialising the modem...";
+      while (*str)
+        displays[0] -> send (*str++);
+      displays[0] -> cr ();
+      displays[0] -> lf ();
+    } /* if */
+#endif	/* UWPC_DOS */
     sendstring (UWConfig.InitString);
 
   // Go into a processing loop to process incoming events //
+  carrier = comcarrier (UWConfig.ComPort);
   slice = 0;
   while (!terminate)
     {
@@ -456,9 +515,11 @@ char	*UWProtocol::start (void)
       if ((newcarrier = comcarrier (UWConfig.ComPort)) != carrier)
         {
 	  carrier = newcarrier;
+#ifdef	UWPC_DOS
 	  if (carrier)
 	    ResetOnline ();		// Reset the online time.
 	  status ();			// Redraw the status line.
+#endif	/* UWPC_DOS */
 	  if (!newcarrier && protocol > 0)
 	    {
 	      // Carrier has dropped - leave Protocol 1 //
@@ -467,6 +528,7 @@ char	*UWProtocol::start (void)
 	    }
 	}
 
+#ifdef	UWPC_DOS
       // Determine if the current system time has changed //
       if (lasttime != CurrentTime)
         {
@@ -480,10 +542,16 @@ char	*UWProtocol::start (void)
 	  lastonline = OnlineTime;
 	  status ();			// Redraw the status line.
 	}
+#endif	/* UWPC_DOS */
 
       // Process characters received from the remote host //
       if ((ch = comreceive (UWConfig.ComPort)) >= 0)
-        fromhost (ch);
+	fromhost (ch);
+
+#ifdef	UWPC_DOS
+      // Under Windows 3.0, the keyboard and mouse events come   //
+      // through the ordinary Windows 3.0 event processing loops //
+      // but under DOS we need to do it ourselves.		 //
 
       // Process keypresses from the user //
       if ((ch = GetKeyPress ()) != -1)
@@ -498,6 +566,14 @@ char	*UWProtocol::start (void)
 	      exitmulti = 0;
 	    }
 	}
+
+      // Process the mouse events if necessary //
+      if (MouseChange)
+        {
+	  RoundWindow = CurrWindow;
+	  SendMouseEvent (clients[CurrWindow]);
+	}
+#endif	/* UWPC_DOS */
 
       if (!(slice = (slice + 1) % SLICE_SIZE))
         {
@@ -517,14 +593,50 @@ char	*UWProtocol::start (void)
 	      freelist = temp;
 	    }
 	}
+
+#ifdef	UWPC_WINDOWS
+      // Let the other applications do some work //
+      Yield ();
+
+      // Process the Windows 3.0 messages that are waiting for processing //
+      if (!PeekMessage (&msg,NULL,NULL,NULL,PM_NOYIELD | PM_REMOVE))
+	continue;
+      if (msg.message == WM_QUIT)
+        break;		// The application has terminated.
+      if (!TranslateAccelerator (hMainWnd,hAccTable,&msg))
+        {
+	  TranslateMessage (&msg);
+	  DispatchMessage (&msg);
+	}
+#endif	/* UWPC_WINDOWS */
     }
 
   // Destroy all active windows and exit UW protocol handling //
   exit ();
+#ifdef	UWPC_WINDOWS
+  delete displays[0];		// Remove the protocol 0 window.
+#endif	/* UWPC_WINDOWS */
 
   comdisable (UWConfig.ComPort,1);
   return (0);
 } // UWProtocol::start //
+
+// Pass a keypress from outside the UW protocol master.
+// This is only called in the Windows 3.0 version.
+void	UWProtocol::sendkey (int wind,int key)
+{
+  // NOTE: This should mirror the GetKeyPress handling in ::start
+  // for the DOS version of the program.
+  RoundWindow = wind;
+  clients[wind] -> key (key);
+  if (exitmulti)		// Check for user-requested exit.
+    {
+      // This check is required because otherwise objects //
+      // will be destroyed while they are being called on //
+      exit ();			// Do the protocol exit.
+      exitmulti = 0;
+    }
+} // UWProtocol::sendkey //
 
 // Force the exit from Protocol 1 or higher, and a
 // return to Protocol 0 (ignored in Protocol 0).
@@ -545,6 +657,18 @@ void	UWProtocol::exit (void)
   LastInput = 0;
   numwinds = 0;			// Resync number of windows (just in case).
   status ();			// Reset the status line.
+#ifdef	UWPC_WINDOWS
+  // Disable the Protocol 1 specific menu items //
+  HMENU hMenu;
+  extern HWND hMainWnd;
+  hMenu = GetMenu (hMainWnd);
+  EnableMenuItem (hMenu,IDM_EXIT,MF_GRAYED);
+  EnableMenuItem (hMenu,IDM_NEW,MF_GRAYED);
+  EnableMenuItem (hMenu,IDM_KILL,MF_GRAYED);
+  EnableMenuItem (hMenu,IDM_NEXTWIN,MF_GRAYED);
+  EnableMenuItem (hMenu,IDM_MINALL,MF_GRAYED);
+  EnableMenuItem (hMenu,IDM_START,MF_ENABLED);
+#endif	/* UWPC_WINDOWS */
 } // UWProtocol::exit //
 
 // Create a new window (ignored in Protocol 0).  Returns
@@ -582,7 +706,25 @@ int	UWProtocol::create (int number)
   if (clients[number] -> isaterminal)
     ((UWTermDesc *)clients[number]) -> setemul (UWConfig.P1TermType);
   if (numwinds == 0)		// If this is the first window in Protocol 1
-    top (number);		// then display it at the top.
+    {				// then display it at the top.
+      top (number);
+#ifdef	UWPC_WINDOWS
+      // Minimize the main window when entering Protocol 1 to get it //
+      // out of the way on the Windows 3.0 desktop.		     //
+      ShowWindow (displays[0] -> hWnd,SW_MINIMIZE);
+
+      // Enable the Protocol 1 specific menu items //
+      HMENU hMenu;
+      extern HWND hMainWnd;
+      hMenu = GetMenu (hMainWnd);
+      EnableMenuItem (hMenu,IDM_EXIT,MF_ENABLED);
+      EnableMenuItem (hMenu,IDM_NEW,MF_ENABLED);
+      EnableMenuItem (hMenu,IDM_KILL,MF_ENABLED);
+      EnableMenuItem (hMenu,IDM_NEXTWIN,MF_ENABLED);
+      EnableMenuItem (hMenu,IDM_MINALL,MF_ENABLED);
+      EnableMenuItem (hMenu,IDM_START,MF_GRAYED);
+#endif	/* UWPC_WINDOWS */
+    } /* if */
   ++numwinds;
   status ();			// Redraw the status line.
   if (docreate)
@@ -671,14 +813,34 @@ void	UWProtocol::top (int number)
   status ();				// Redraw the status line.
 } // UWProtocol::top //
 
+// Cycle around to the next window in Protocol 1/2.
+void	UWProtocol::nextwindow (void)
+{
+  int newwin;
+  if (protocol == 0)
+    return;				// Cannot cycle windows in Protocol 0.
+  newwin = CurrWindow + 1;
+  if (newwin >= NUM_UW_WINDOWS)
+    newwin = 1;
+  while (newwin != CurrWindow && clients[newwin] == 0)
+    {
+      ++newwin;
+      if (newwin >= NUM_UW_WINDOWS)
+        newwin = 1;
+    } /* while */
+  top (newwin);				// Bring the new window to the top.
+} // UWProtocol::nextwindow //
+
 // Jump out to a DOS shell, and fix everything on return.
 // Optionally execute a command in DOS.
 void	UWProtocol::jumpdos (char *cmdline)
 {
+#ifdef	UWPC_DOS
   HardwareScreen.jumpdos (cmdline);	// Clear screen and jump out to DOS.
   comfix (UWConfig.ComPort);		// Fix the communications port.
   displays[CurrWindow] -> top (1);	// Redraw the top-most window.
   status ();				// Redraw the status line.
+#endif	/* UWPC_DOS */
 } // UWProtocol::jumpdos //
 
 // Hangup the modem and return to Protocol 0.
@@ -688,7 +850,7 @@ void	UWProtocol::hangup (void)
     protocol = -2;
   exit ();
   comdropdtr (UWConfig.ComPort);	// Drop the COM port's DTR signal
-  delay (100);				// Wait for 100 ms before raising
+  DELAY_FUNC (100);			// Wait for 100 ms before raising
   comraisedtr (UWConfig.ComPort);	// Raise the DTR signal again
   if (comcarrier (UWConfig.ComPort))	// If the carrier is still present
     sendstring (UWConfig.HangupString);	// then send the hangup string
@@ -701,7 +863,7 @@ void	UWProtocol::sendstring (char *str)
   while (*str)
     {
       if (*str == '~')
-        delay (500);			// Wait 1/2th a second for '~'
+        DELAY_FUNC (500);		// Wait 1/2th a second for '~'
        else if (*str == '^')
         {
 	  if (*(str + 1))
@@ -725,9 +887,23 @@ void	UWProtocol::sendbreak (void)
     protocol = -2;
   exit ();
   combreak (UWConfig.ComPort,1);	// Turn on the BREAK signal.
-  delay (500);				// Wait for 500ms for the pulse.
+  DELAY_FUNC (500);			// Wait for 500ms for the pulse.
   combreak (UWConfig.ComPort,0);	// Turn off the BREAK signal.
 } // UWProtocol::sendbreak //
+
+// Minimize all windows except the given window.  This only
+// has an effect in the Windows 3.0 version.
+void	UWProtocol::minall (int wind)
+{
+#ifdef	UWPC_WINDOWS
+  int window;
+  for (window = 0;window < NUM_UW_WINDOWS;++window)
+    {
+      if (window != wind && displays[window])
+        ShowWindow(displays[window] -> hWnd,SW_MINIMIZE);
+    } /* if */
+#endif	/* UWPC_WINDOWS */
+} // UWProtocol::minall //
 
 // Send a character from a client to the remote host.
 void	UWClient::send (int ch)

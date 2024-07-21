@@ -26,6 +26,8 @@
 //  Version  DD/MM/YY  By  Description
 //  -------  --------  --  --------------------------------------
 //    1.0    25/05/91  RW  Original Version of ANSI.CAP
+//    1.1    25/07/91  RW  Add support for client escapes.
+//    1.2    04/08/91  RW  Attempt to fix it and make it work. :-(
 //
 //-------------------------------------------------------------------------
 
@@ -111,8 +113,12 @@ getnums:	getarg			// Get a numeric argument.
 		  'r',loop		// No scrolling margins yet.
 		  's',saveall
 		  'u',restall
+		  '|',doclient		// UW/PC client escapes.
 		endsw
 		jmp	loop		// Ignore the escape sequence.
+doclient:	getch			// Get the client operation character.
+		client
+		jmp	loop
 chkins:		geta	1,0
 		cmp	4		// Check to see if insert mode is req.
 		je	enterins

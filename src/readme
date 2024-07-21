@@ -7,7 +7,7 @@
 
 You may modify this code anyway you like (under the terms of the GNU license),
 but if you make a derivative version of UW/PC I'd appreciate it if you did
-not release it for full public distribution.  Giving copies away to you friends
+not release it for full public distribution. Giving copies away to your friends
 is fine, given the proviso that they don't distribute it around much further
 than that.  This way I can keep control of the core UW/PC distribution and
 we can avoid heaps of "hacked" copies from hitting the streets.
@@ -98,6 +98,13 @@ method of expanding UW/PC is through the introduction of new clients.
 			protocols - YUK!!  But it's the best I can do without
 			adding a mini multi-tasking operating system that would
 			impose too many overheads.
+	CLIPBD.CPP	Clipboard processing routines.
+	MOUSE.CPP	Routines for managing the mouse events.
+	CLIENTS.CPP	Top-level interface to the internal clients for FTP,
+			mail and DOS logins.
+	MAIL.CPP	Mail handling client for UW/PC.
+	LOGIN.CPP	Login handling client for UW/PC.
+	FTP.CPP		Handling for the UWFTP protocol ** not done yet **.
 	CLIENT.H	Declarations for the major client types.
 	DISPLAY.H	Declarations for the window display handling routines.
 	EXTERN.H	Declarations that are specific to either DOS or
@@ -116,6 +123,11 @@ method of expanding UW/PC is through the introduction of new clients.
 	FILES.H		Definitions of the file transfer classes.
 	DIALOG.H	Declarations of the various dialog box types.
 	SYMBOLS.H	Declarations for TERMCC's symbol table routines.
+	CLIPBD.H	Declarations for the clipboard clients.
+	MOUSE.H		Declarations for the mouse handling routines.
+	MAIL.H		Declarations for the mail handling client.
+	LOGIN.H		Declarations for the login handling client.
+	FTP.H		Declarations for the FTP handling client ** not done **.
 	TERMCC.L	Lexical analysis declarations for TERMCC that must be
 			processed by FLEX.
 	TERMCC.Y	Syntactical analysis declarations for TERMCC that must
@@ -129,7 +141,9 @@ method of expanding UW/PC is through the introduction of new clients.
 3. FUTURE ENHANCEMENTS.
 
 This section describes some of the upcoming future enhancements, their possible
-version release numbers and the approximate release dates.
+version release numbers.  [Note: since writing this list, some of the version
+numbers have changed: I'm planning to get the Windows 3.0 version working as
+soon as possible.]
 
         1. A version for Microsoft Windows 3.0 - all singing, all dancing.
            [Version 2.50].
@@ -156,16 +170,6 @@ version release numbers and the approximate release dates.
        10. Some protocol 2 support - especially for setting the terminal
            type to be used within a window from the remote machine, and
 	   to give a small "split-screen" capability.  [Version 2.10].
-
-Release dates:
-
-	2.00	- May 1991.
-	2.10	- June 1991.
-	2.50	- July 1991.
-	2.60	- Sept 1991 (??).
-	2.70	- Sept 1991.
-	3.00	- Dec 1991/Jan 1992.
-	3.10	- Feb 1992 (??).
 
 Versions 2.60 and 3.10 will depend on whether I get enough time to write my
 NNTP news reader - I may bypass it until the full external client services

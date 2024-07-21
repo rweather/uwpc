@@ -26,6 +26,7 @@
 //  -------  --------  --  --------------------------------------
 //    1.0    20/03/91  RW  Original Version of DISPLAY.H
 //    1.1    05/05/91  RW  Start adding Windows 3.0 information.
+//    1.2    08/06/91  RW  Add support for cut and paste.
 //
 //-------------------------------------------------------------------------
 
@@ -59,12 +60,11 @@ protected:
 	int	wrap52;			// Non-zero for a VT52 wrap.
 
 #ifdef	UWPC_WINDOWS
-	int	charwid,charht;		// Size of characters to be drawn.
 	int	curson;			// Non-zero if the cursor is on.
 
-	// Invalidate an area in the window for repainting //
-	// This will also do a window update as well.	   //
-	void	invalidate (int x1,int y1,int x2,int y2);
+	// Repaint and area of the current window.  If hDC    //
+	// is NULL, then GetDC will be used to get a context. //
+	void	repaint (int x1,int y1,int x2,int y2,HDC hDC=NULL);
 
 	// Turn the cursor off while performing some window update //
 	void	cursoroff (void);
@@ -84,6 +84,7 @@ public:
 	int	x,y;			// Current cursor position.
 
 #ifdef	UWPC_WINDOWS
+	int	wNumber;		// Window number.
 	HWND	hWnd;			// Window's handle.
 #endif
 
@@ -160,6 +161,14 @@ public:
 	// given string, otherwise ignore the request.  If "str"
 	// is NULL, then clear the status line (i.e. don't display).
 	void	status	(char *str,int length);
+
+	// Mark a rectangle on the screen for cut-and-paste.
+	// Two calls to this routine will remove the mark.
+	void	markcut	(int x1,int y1,int x2,int y2);
+
+	// Copy screen data into a clipboard buffer.  The
+	// length of the written data is returned.
+	int	copycut	(int x1,int y1,int x2,int y2,char *buffer);
 
 #ifdef	UWPC_WINDOWS
 	// Process the messages for a display window.

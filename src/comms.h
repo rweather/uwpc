@@ -35,6 +35,7 @@
       1.3    17/03/91  RW  Create 'comfix' to fix DOS shell-out bug.
       1.4    21/03/91  RW  Fix minor problem with sign extension in comreceive.
       1.5    22/03/91  RW  Fix COM port addressing & add COM3/COM4 support.
+      1.6    31/10/91  RW  Add some more stuff for Windows 3.0 support.
 
 -----------------------------------------------------------------------------*/
 
@@ -83,7 +84,7 @@ extern	"C" {
 extern	int	_Cdecl	comports[4];
 
 /* Enable a COM port for Interrupt Driven I/O by this module */
-void	_Cdecl	comenable (int port);
+int	_Cdecl	comenable (int port);
 
 /* Save the current setting of a COM port to be restored later */
 /* Call this function before calling 'comenable' on the port.  */
@@ -126,6 +127,13 @@ void	_Cdecl	comsend (int port,int ch);
 
 /* Test to see if a carrier is present - can be called before comenable */
 int	_Cdecl	comcarrier (int port);
+
+/* Enable or disable the detection of carrier loss */
+void	_Cdecl	comloss	(int port,int enable);
+
+/* Test if the last transmitted character could not be sent because */
+/* the carrier has been lost.  This is mainly for Windows 3.0.	    */
+int	_Cdecl	comlost	(int port);
 
 /* Test to see if the DSR (Data Set Ready) signal is present */
 int	_Cdecl	comdsr (int port);

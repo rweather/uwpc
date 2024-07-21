@@ -10,11 +10,13 @@
 # you can remove the references for building TERMCC.EXE from this makefile,
 # and just use the supplied TERMCC.EXE for compiling the capability files.
 
-CFLAGS=-mc -v
+#CFLAGS=-mc -v
+CFLAGS=-mc
 COMMS=comms.c
 OBJECTS=main.obj screen.obj comms.obj client.obj keys.obj uw.obj display.obj \
 	config.obj terminal.obj vt52.obj adm31.obj ansi.obj timer.obj \
-	dialog.obj files.obj xmodem.obj
+	dialog.obj files.obj xmodem.obj clipbd.obj mouse.obj clients.obj \
+	mail.obj login.obj
 COMPILE=tcc $(CFLAGS)
 BGIOBJ=c:\tc\bgi\bgiobj
 LEXOPTS=-s
@@ -84,36 +86,44 @@ ansi.trm:	termcc.exe
 
 # Define the .OBJ -> .H dependencies
 main.obj:	screen.h client.h uw.h keys.h config.h timer.h dialog.h \
-		files.h comms.h
-screen.obj:	screen.h config.h
-client.obj:	client.h display.h config.h uw.h comms.h extern.h
+		files.h comms.h clipbd.h mouse.h extern.h
+screen.obj:	screen.h config.h mouse.h extern.h
+client.obj:	client.h display.h config.h uw.h comms.h extern.h clipbd.h \
+		mouse.h
 keys.obj:	keys.h config.h
 uw.obj:		uw.h comms.h client.h config.h display.h keys.h uwproto.h \
-		screen.h timer.h extern.h
+		screen.h timer.h extern.h mouse.h
 display.obj:	display.h screen.h extern.h config.h
-config.obj:	config.h comms.h client.h opcodes.h
-terminal.obj:	client.h display.h opcodes.h screen.h config.h extern.h
+config.obj:	config.h comms.h client.h opcodes.h screen.h extern.h
+terminal.obj:	client.h display.h opcodes.h screen.h config.h extern.h \
+		uw.h
 timer.obj:	timer.h
-dialog.obj:	dialog.h uw.h client.h screen.h display.h extern.h keys.h
-files.obj:	files.h client.h uw.h keys.h
+dialog.obj:	dialog.h uw.h client.h screen.h display.h extern.h keys.h \
+		config.h
+files.obj:	files.h client.h uw.h keys.h extern.h
 xmodem.obj:	files.h client.h uw.h timer.h display.h
+clipbd.obj:	clipbd.h client.h display.h keys.h uw.h mouse.h
+mouse.obj:	client.h mouse.h screen.h extern.h
+clients.obj:	uw.h mail.h client.h login.h display.h extern.h
+mail.obj:	uw.h mail.h client.h display.h extern.h config.h
+login.obj:	uw.h client.h config.h login.h
 
 # Create the small SETMODE.COM program from the debug script SETMODE.SCR
 setmode.com:	setmode.scr
 		debug <setmode.scr
 
-# Create the backup ZIP file UWPC200X.ZIP
+# Create the backup ZIP file UWPC201X.ZIP
 backup:
-		-pkzip -u uwpc200x.zip *.c *.cpp *.h *.l *.y *.doc uw.cfg \
+		-pkzip -u uwpc201x.zip *.c *.cpp *.h *.l *.y *.doc uw.cfg \
 			uweg.cfg setmode.scr makefile history *.cap readme
 
-# Make a beta-release distribution (without server, etc) UWPC200B.ZIP
+# Make a beta-release distribution (without server, etc) UWPC201B.ZIP
 beta:		uw.exe setmode.com
 		-tdstrip uw.exe
-		-pkzip -u uwpc200b.zip uw.exe *.doc uweg.cfg termcc.exe \
+		-pkzip -u uwpc201b.zip uw.exe *.doc uweg.cfg termcc.exe \
 				uwftp.c setmode.com history
 
-# Create the distribution ZIP file UWPC200.ZIP
+# Create the distribution ZIP file UWPC201.ZIP
 dist:		uw.exe termcc.exe setmode.com
 		mkdir dist
 		-tdstrip uw.exe
@@ -133,8 +143,8 @@ dist:		uw.exe termcc.exe setmode.com
 		-pkzip -a dist\uw-src.zip readme *.c *.cpp *.h *.l *.y *.cap \
 				uw.rsp setmode.scr uwftp.doc makefile
 		copy uwserver.tar dist
-		del uwpc200.zip
-		-pkzip -a uwpc200.zip dist\*.*
+		del uwpc201.zip
+		-pkzip -a uwpc201.zip dist\*.*
 
 # Clean up all non-essential generated compilation files.
 clean:
@@ -143,7 +153,6 @@ clean:
 		del *.map
 		del uw.lib
 		del uw.bak
-		del termcc.out
 		del lexyy.c
 		del y_tab.c
 		del y_tab.h

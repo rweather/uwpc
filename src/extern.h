@@ -36,12 +36,21 @@
 // Define the declarations necessary for the DOS version of UW/PC //
 #define	UWPC_DOS	1
 
+// Use the Turbo C++ "delay" function under DOS //
+#define	DELAY_FUNC	delay
+
 #else /* _Windows */
 
 // Define the declarations necessary for the Windows 3.0 version of UW/PC //
 #define	UWPC_WINDOWS	1
 
+#ifndef	NO_WINDOWS_H
 #include <windows.h>
+#endif	/* NO_WINDOWS_H */
+
+// Define the replacement for the DOS "delay" function //
+void	UWDelay	(unsigned ms);
+#define	DELAY_FUNC	UWDelay
 
 #endif /* _Windows */
 

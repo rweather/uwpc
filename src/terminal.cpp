@@ -26,6 +26,7 @@
 //  Version  DD/MM/YY  By  Description
 //  -------  --------  --  --------------------------------------
 //    1.0    04/04/91  RW  Original Version of TERMINAL.CPP
+//    1.1    25/07/91  RW  Add handling of UW/PC clients.
 //
 //-------------------------------------------------------------------------
 
@@ -34,6 +35,7 @@
 #include "opcodes.h"		// Opcodes for the terminal description
 #include "screen.h"		// Screen accessing classes
 #include "config.h"		// Configuration handling routines
+#include "uw.h"			// UW protocol declarations
 #include <ctype.h>		// Character typing macros
 
 // Jump to the currently stored location.
@@ -70,6 +72,7 @@ void	UWTermDesc::interpret (int ch)
 	case OP_DELLINE:	window -> delline (); break;
 	case OP_INSCHAR:	window -> inschar (acc); break;
 	case OP_DELCHAR:	window -> delchar (); break;
+#ifdef	UWPC_DOS
 	case OP_SETATTR:	window -> setattr
 		  (HardwareScreen.attributes[description[PC++]]); break;
 	case OP_SETATTR_ACC:	window -> setattr
@@ -78,6 +81,16 @@ void	UWTermDesc::interpret (int ch)
 		  (HardwareScreen.attributes[description[PC++]]); break;
 	case OP_SETSCRL_ACC:	window -> setscroll
 		  (HardwareScreen.attributes[acc]); break;
+#else	/* UWPC_DOS */
+	case OP_SETATTR:	window -> setattr
+		  	(UWConfig.NewAttrs[description[PC++]]); break;
+	case OP_SETATTR_ACC:	window -> setattr
+		  	(UWConfig.NewAttrs[acc]); break;
+	case OP_SETSCRL:	window -> setscroll
+		  	(UWConfig.NewAttrs[description[PC++]]); break;
+	case OP_SETSCRL_ACC:	window -> setscroll
+		  	(UWConfig.NewAttrs[acc]); break;
+#endif	/* UWPC_DOS */
 	case OP_SETX:		regx = acc; break;
 	case OP_SETY:		regy = acc; break;
 	case OP_LOAD:		acc = description[PC++] & 255; break;
@@ -199,6 +212,8 @@ void	UWTermDesc::interpret (int ch)
 	case OP_SAVEATTR:	saveattr = window -> getattr (); break;
 	case OP_RESTATTR:	window -> setattr (saveattr); break;
 	case OP_INSBLANK:	window -> inschar (-1); break;
+	case OP_CLIENT:		UWMaster.startclient (acc);
+				break;
 	default:		break;
       } // switch //
 } // UWTermDesc::interpret //

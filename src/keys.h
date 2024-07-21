@@ -29,6 +29,8 @@
      1.2    01/01/91  RW  Add trapping of INT 1B to disable CTRL-BREAK
      1.3    23/03/91  RW  Convert to C++ for Version 2.00 of UW/PC.
      1.4    05/05/91  RW  Process function key expansions.
+     1.5    08/06/91  RW  Add keys for clipboard operation.
+     1.6    27/09/91  RW  Add ALT-W for "next window" key.
 
 -------------------------------------------------------------------------*/
 
@@ -40,7 +42,10 @@
 #define ALT_GET_NUM(key)	(((key >> 8) & 255) - 0x77)
 #define QUIT_KEY		0x2D00	/* ALT-X */
 #define QUIT_KEY2		0x1000	/* ALT-Q */
+#ifndef	UWPC_WINDOWS
+/* The <windows.h> file has already defined HELP_KEY for something else */
 #define HELP_KEY		0x2C00	/* ALT-Z */
+#endif	/* UWPC_WINDOWS */
 #define EXIT_KEY		0x1200	/* ALT-E - exit UW */
 #define HANGUP_KEY		0x2300	/* ALT-H */
 #define BREAK_KEY		0x3000	/* ALT-B */
@@ -51,6 +56,9 @@
 #define START_KEY		0x1600	/* ALT-U */
 #define UPLOAD_KEY		0x1F00	/* ALT-S */
 #define DOWNLOAD_KEY		0x1300	/* ALT-R */
+#define	CUT_KEY			0x2E00	/* ALT-C */
+#define	PASTE_KEY		0x1900	/* ALT-P */
+#define	NEXTWIN_KEY		0x1100	/* ALT-W and ALT-0 */
 #define CURSOR_UP		0x4800
 #define CURSOR_DOWN		0x5000
 #define CURSOR_LEFT		0x4B00
@@ -64,6 +72,8 @@
 #define DIAL_KEY		0x2000	/* ALT-D */
 #define UWFTP_KEY		0x2100	/* ALT-F */
 #define CAPTURE_KEY		0x2600	/* ALT-L */
+#define	MAIL_KEY		0x3200	/* ALT-M */
+#define	STTY_KEY		0x1400	/* ALT-T */
 #define	PAUSE_KEY		-2	/* 1/2 second pause */
 
 /* Initialise the keyboard handling system */

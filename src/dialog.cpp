@@ -34,6 +34,7 @@
 #include "uw.h"			// UW Protocol accessing routines.
 #include "display.h"		// Display handling routines.
 #include "keys.h"		// Keypress declarations.
+#include "config.h"		// Configuration routines.
 #include <string.h>		// String handling routines.
 
 #pragma	warn	-par
@@ -60,7 +61,7 @@ UWDialogBox::UWDialogBox (UWDisplay *wind,int x1,int y1,int x2,int y2) :
   dy1 = y1;
   dx2 = x2;
   dy2 = y2;
-  HardwareScreen.shape (CURS_INVISIBLE);
+  HardwareScreen.shape ((CursorShapes)UWConfig.CursorSize);
   HardwareScreen.mark (x1,y1,x2,y2);
   HardwareScreen.scroll (x1,y1,x2,y2,0,ATTR(ATTR_NORMAL));
   attr = ATTR(ATTR_HIGHLIGHT) << 8;	// Draw a box around dialog area.
@@ -116,6 +117,7 @@ void	UWDialogBox::key (int keypress)
 //
 static	char *HelpBox[] =
 	 {"ALT-B - Send a BREAK pulse",
+	  "ALT-C - Cut to clipboard",
 	  "ALT-D - Send the dialing string",
 	  "ALT-E - Exit a UW session",
 #ifdef	DOOBERY
@@ -126,18 +128,24 @@ static	char *HelpBox[] =
 	  "ALT-J - Jump to DOS",
 	  "ALT-K - Kill current window",
 	  "ALT-L - Capture ON/OFF",
+#ifdef	DOOBERY
+	  "ALT-M - Send \"uwmail^M\" to host",
+#endif
 	  "ALT-N - Create a new window",
+	  "ALT-P - Paste from clipboard",
 	  "ALT-Q - Quit the program",
 	  "ALT-R - Download (receive) a file",
 	  "ALT-S - Upload (send) a file",
+	  "ALT-T - Send \"stty\" string",
 	  "ALT-U - Send \"uw^M\" to host",
+	  "ALT-W - Cycle to the next window",
 	  "ALT-X - Exit the program",
 	  "ALT-Z - This help information",
 	  "ALT-n - Go to window \"n\" (1-7)",
 	  " [Press any key to continue]"
 	 };
 #define	HELP_WIDTH	33
-#define	HELP_HEIGHT	17
+#define	HELP_HEIGHT	21
 
 UWHelpBox::UWHelpBox (UWDisplay *wind) :
 	UWDialogBox (wind,(COLS - HELP_WIDTH - 4) / 2,
@@ -192,7 +200,7 @@ UWEditBox::UWEditBox (UWDisplay *wind,char *prompt,int editsize) :
   size = editsize;
   posn = 0;
   HardwareScreen.cursor (dx1 + 4 + posn,dy1 + 3);
-  HardwareScreen.shape (CURS_UNDERLINE);
+  HardwareScreen.shape ((CursorShapes)UWConfig.CursorSize);
   buffer[0] = '\0';
   length = 0;
 } // UWEditBox::UWEditBox //

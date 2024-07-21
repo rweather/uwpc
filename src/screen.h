@@ -32,6 +32,8 @@
 #ifndef __SCREEN_H__
 #define	__SCREEN_H__
 
+#include "extern.h"
+
 //
 // Define the available hardware cursor shapes.
 //
@@ -53,6 +55,11 @@ enum   ScreenAttrs {
 	ATTR_HIGH_STATUS	= 4,
 	NUM_ATTRS		= 5
 };
+
+//
+// The rest of this file doesn't apply to the Windows 3.0 version.
+//
+#ifndef	UWPC_WINDOWS
 
 //
 // Define the hardware screen object.  An instance of this
@@ -123,5 +130,7 @@ public:
 // Define the primary hardware screen handling object.
 //
 extern	ScreenClass	HardwareScreen;
+
+#endif	/* UWPC_WINDOWS */
 
 #endif	/* __SCREEN_H__ */

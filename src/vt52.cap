@@ -26,6 +26,7 @@
 //  -------  --------  --  --------------------------------------
 //    1.0    23/03/91  RW  Original Version of VT52.CAP
 //    1.1    24/05/91  RW  Add some other "vt5/6" series codes.
+//    1.2    25/07/91  RW  Add support for client escapes.
 //
 //-------------------------------------------------------------------------
 
@@ -80,6 +81,7 @@ escproc:	getch			// Get the escape character.
 		  'O',deleteln		// h1552
 		  'S',standout		// h1552-rv (reverse video)
 		  'T',normal		// h1552-rv
+		  '|',doclient		// UW/PC client escape.
 		endsw
 		jmp	start		// Ignore the escape code.
 //
@@ -88,6 +90,9 @@ escproc:	getch			// Get the escape character.
 savepos:	savexy
 		jmp	start
 restpos:	restxy
+		jmp	start
+doclient:	getch			// Get the client operation character.
+		client
 		jmp	start
 upline:		getxy			// Get current cursor position.
 		gety			// Need to change Y co-ordinate.
