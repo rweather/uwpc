@@ -1,0 +1,3 @@
+-+main.obj -+screen.obj -+comms.obj -+client.obj -+keys.obj -+timer.obj &
+-+uw.obj -+display.obj -+config.obj -+terminal.obj -+vt52.obj -+adm31.obj &
+-+ansi.obj -+dialog.obj -+files.obj -+xmodem.obj

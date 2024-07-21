@@ -2,6 +2,9 @@
 
    COMMS.C - Serial Communications Routines for Turbo C/C++
 
+    NOTE: COM1 and COM3 cannot be used simultaneously and COM2 and COM4
+    cannot be used simultaneously.
+
     This file is part of UW/PC - a multi-window comms package for the PC.
     Copyright (C) 1990-1991  Rhys Weatherley
 
@@ -31,8 +34,13 @@
       1.2    17/11/90  RW  Add 'leavedtr' parameter to "comrestore".
       1.3    17/03/91  RW  Create 'comfix' to fix DOS shell-out bug.
       1.4    21/03/91  RW  Fix minor problem with sign extension in comreceive.
+      1.5    22/03/91  RW  Fix COM port addressing & add COM3/COM4 support.
 
 -----------------------------------------------------------------------------*/
+
+#if defined(USE_ASM)
+#pragma	inline			/* There is inline assembly in this file */
+#endif
 
 #include "comms.h"		/* Declarations for this module */
 #include <dos.h>
@@ -62,6 +70,10 @@
 #define COM_INT_2   0x0B	/* Interrupt 0x0B handles IRQ3 (or COM2) */
 #define INT_MASK_2  0x08	/* Mask for PIC (programmable interrupt
 				   controller) 8259A */
+
+/* Define the port addresses for the 4 serial ports. */
+/* These can be changed by the caller if necessary.  */
+int	_Cdecl	comports[4] = {0x3F8,0x2F8,0x3E8,0x2E8};
 
 /* Define the interrupt buffer structure */
 
@@ -106,9 +118,11 @@ int	port,on;
 {
   switch (port)
     {
-      case 1:	Com1Buf.testbit = changetest (Com1Buf.dataport + COM_MCR,on);
+      case 1: case 3:
+      		Com1Buf.testbit = changetest (Com1Buf.dataport + COM_MCR,on);
 	        break;
-      case 2:	Com2Buf.testbit = changetest (Com2Buf.dataport + COM_MCR,on);
+      case 2: case 4:
+      		Com2Buf.testbit = changetest (Com2Buf.dataport + COM_MCR,on);
 	        break;
       default:	break;
     }
@@ -121,10 +135,12 @@ int	port;
 {
   switch (port)
     {
-      case 1:	outportb (Com1Buf.dataport + COM_MCR,0x0B |
+      case 1: case 3:
+      		outportb (Com1Buf.dataport + COM_MCR,0x0B |
 			  Com1Buf.testbit);	/* Raise DTR */
 		return (Com1Buf.size);
-      case 2:	outportb (Com2Buf.dataport + COM_MCR,0x0B |
+      case 2: case 4:
+      		outportb (Com2Buf.dataport + COM_MCR,0x0B |
 			  Com2Buf.testbit);	/* Raise DTR */
 		return (Com2Buf.size);
       default:	return 0;
@@ -137,12 +153,14 @@ int	port;
 {
   switch (port)
     {
-      case 1:	disable ();	/* Disallow ints while flushing */
+      case 1: case 3:
+      		disable ();	/* Disallow ints while flushing */
 		Com1Buf.size = 0;
 		Com1Buf.output = Com1Buf.input;
 		enable ();
 		break;
-      case 2:	disable ();	/* Disallow ints while flushing */
+      case 2: case 4:
+      		disable ();	/* Disallow ints while flushing */
 		Com2Buf.size = 0;
 		Com2Buf.output = Com2Buf.input;
 		enable ();
@@ -159,7 +177,8 @@ int	port;
   int ch;
   switch (port)
     {
-      case 1:	outportb (Com1Buf.dataport + COM_MCR,0x0B |
+      case 1: case 3:
+      		outportb (Com1Buf.dataport + COM_MCR,0x0B |
 				Com1Buf.testbit);	/* Raise DTR */
 		if (Com1Buf.size == 0) return -1;
 		else {
@@ -169,7 +188,8 @@ int	port;
 			--Com1Buf.size;
 			return (ch & 255);
 		}
-      case 2:	outportb (Com2Buf.dataport + COM_MCR,0x0B |
+      case 2: case 4:
+      		outportb (Com2Buf.dataport + COM_MCR,0x0B |
 				Com2Buf.testbit);	/* Raise DTR */
 		if (Com2Buf.size == 0) return -1;
 		else {
@@ -187,44 +207,112 @@ int	port;
 
 static void interrupt int_com1()
 {
+#if defined(USE_ASM)
+  asm cli;			/* Make sure ints are disabled */
+  asm mov dx,Com1Buf.statport;	/* Check for errors */
+  asm in al,dx;
+  asm and al,ERR_MSK;
+  asm jnz error;
+  asm mov dx,Com1Buf.dataport;	/* Get the received character */
+  asm in al,dx;
+  asm mov cx,Com1Buf.size;	/* Prepare to store the character */
+  asm cmp cx,MAX_INT_BUFSIZ;
+  asm jae done;
+  asm mov bx,Com1Buf.input;
+  asm mov byte ptr Com1Buf.buffer[bx],al;/* Store character in buffer */
+  asm inc bx;			/* And advance buffer pointer */
+  asm and bx,(MAX_INT_BUFSIZ - 1);
+  asm mov Com1Buf.input,bx;
+  asm inc Com1Buf.size;
+  asm jmp done;
+ error:
+  asm mov dx,Com1Buf.dataport;	/* Remove the erroneous character */
+  asm in al,dx;
+ done:
+  asm mov al,0x20;		/* Tell PIC we have handled the int */
+  asm out PIC_EOI,al;
+  asm mov dx,Com1Buf.dataport;	/* Create an interrupt edge */
+  asm add dx,COM_IER;
+  asm in al,dx;
+  asm mov ah,al;
+  asm mov al,0;
+  asm out dx,al;
+  asm mov al,ah;
+  asm out dx,al;
+#else
   char ch;
-  disable();	/* Make sure ints are disabled */
+  disable();   /* Make sure ints are disabled */
   /* If no error occured, then store the character */
   if ((ch = (inportb(Com1Buf.statport)&ERR_MSK)) == 0)
     {
       ch = inportb(Com1Buf.dataport);/* Get the character */
       if (Com1Buf.size < MAX_INT_BUFSIZ) /* Store the char */
         {
-	  Com1Buf.buffer[Com1Buf.input] = ch;
-	  Com1Buf.input = (Com1Buf.input + 1) % MAX_INT_BUFSIZ;
-	  ++Com1Buf.size;
+         Com1Buf.buffer[Com1Buf.input] = ch;
+         Com1Buf.input = (Com1Buf.input + 1) % MAX_INT_BUFSIZ;
+         ++Com1Buf.size;
         }
     }
    else
     ch = inportb(Com1Buf.dataport);/* Remove the erroneous character */
-  outportb(PIC_EOI,0x20);	/* Tell PIC we have handled the int */
+  outportb(PIC_EOI,0x20);      /* Tell PIC we have handled the int */
+#endif
 }
 
 /*  COM2 Interrupt handler.  HARDWARE DEPENDENT */
 
 static void interrupt int_com2()
 {
+#if defined(USE_ASM)
+  asm cli;			/* Make sure ints are disabled */
+  asm mov dx,Com2Buf.statport;	/* Check for errors */
+  asm in al,dx;
+  asm and al,ERR_MSK;
+  asm jnz error;
+  asm mov dx,Com2Buf.dataport;	/* Get the received character */
+  asm in al,dx;
+  asm mov cx,Com2Buf.size;	/* Prepare to store the character */
+  asm cmp cx,MAX_INT_BUFSIZ;
+  asm jae done;
+  asm mov bx,Com2Buf.input;
+  asm mov byte ptr Com2Buf.buffer[bx],al;/* Store character in buffer */
+  asm inc bx;			/* And advance buffer pointer */
+  asm and bx,(MAX_INT_BUFSIZ - 1);
+  asm mov Com2Buf.input,bx;
+  asm inc Com2Buf.size;
+  asm jmp done;
+ error:
+  asm mov dx,Com2Buf.dataport;	/* Remove the erroneous character */
+  asm in al,dx;
+ done:
+  asm mov al,0x20;		/* Tell PIC we have handled the int */
+  asm out PIC_EOI,al;
+  asm mov dx,Com2Buf.dataport;	/* Create an interrupt edge */
+  asm add dx,COM_IER;
+  asm in al,dx;
+  asm mov ah,al;
+  asm mov al,0;
+  asm out dx,al;
+  asm mov al,ah;
+  asm out dx,al;
+#else
   char ch;
-  disable();	/* Make sure ints are disabled */
+  disable();   /* Make sure ints are disabled */
   /* If no error occured, then store the character */
   if ((ch = (inportb(Com2Buf.statport)&ERR_MSK)) == 0)
     {
       ch = inportb(Com2Buf.dataport);/* Get the character */
       if (Com2Buf.size < MAX_INT_BUFSIZ) /* Store the char */
         {
-	  Com2Buf.buffer[Com2Buf.input] = ch;
-	  Com2Buf.input = (Com2Buf.input + 1) % MAX_INT_BUFSIZ;
-	  ++Com2Buf.size;
+         Com2Buf.buffer[Com2Buf.input] = ch;
+         Com2Buf.input = (Com2Buf.input + 1) % MAX_INT_BUFSIZ;
+         ++Com2Buf.size;
         }
     }
    else
     ch = inportb(Com2Buf.dataport);/* Remove the erroneous character */
-  outportb(PIC_EOI,0x20);	/* Tell PIC we have handled the int */
+  outportb(PIC_EOI,0x20);      /* Tell PIC we have handled the int */
+#endif
 }
 
 /* Enable a COM port given its I/O port address */
@@ -255,11 +343,12 @@ int	port;
   int dataport;
   switch (port)
     {
-      case 1:	/* Initialise buffers for COM1 */
+      case 1: case 3:
+      		/* Initialise buffers for COM1 */
 		Com1Buf.input = 0;
 		Com1Buf.output = 0;
 		Com1Buf.size = 0;
-		dataport = *((int far *)0x400L);
+		dataport = comports[port - 1];
 		Com1Buf.dataport = dataport;
 		Com1Buf.statport = Com1Buf.dataport + COM_STAT;
 		Com1Buf.testbit = 0;
@@ -278,11 +367,12 @@ int	port;
 		ch &= (0xFF^INT_MASK_1);/* Reset mask for COM1 */
 		outportb(PIC_MASK,ch);	/* Send it to the 8259A */
 		break;
-      case 2:	/* Initialise buffers for COM2 */
+      case 2: case 4:
+      		/* Initialise buffers for COM2 */
 		Com2Buf.input = 0;
 		Com2Buf.output = 0;
 		Com2Buf.size = 0;
-		dataport = *((int far *)0x402L);
+		dataport = comports[port - 1];
 		Com2Buf.dataport = dataport;
 		Com2Buf.statport = Com2Buf.dataport + COM_STAT;
 		Com2Buf.testbit = 0;
@@ -313,7 +403,8 @@ int	port;
   int dataport;
   switch (port)
     {
-      case 1:	dataport = *((int far *)0x400L);
+      case 1: case 3:
+      		dataport = comports[port - 1];
 		Com1Buf.oldlcr = inportb (dataport + COM_LCR);
 		Com1Buf.oldmcr = inportb (dataport + COM_MCR);
 		outportb (dataport + COM_LCR,Com1Buf.oldlcr & 0x7F);
@@ -322,7 +413,8 @@ int	port;
 		Com1Buf.oldbaud = inport (dataport);
 		outportb (dataport + COM_LCR,Com1Buf.oldlcr);
       		break;
-      case 2:	dataport = *((int far *)0x402L);
+      case 2: case 4:
+      		dataport = comports[port - 1];
 		Com2Buf.oldlcr = inportb (dataport + COM_LCR);
 		Com2Buf.oldmcr = inportb (dataport + COM_MCR);
 		outportb (dataport + COM_LCR,Com2Buf.oldlcr & 0x7F);
@@ -346,8 +438,10 @@ int	port,params;
   int value,dataport;
   switch (port)
     {
-      case 1: dataport = Com1Buf.dataport; break;
-      case 2: dataport = Com2Buf.dataport; break;
+      case 1: case 3:
+      		dataport = Com1Buf.dataport; break;
+      case 2: case 4:
+      		dataport = Com2Buf.dataport; break;
       default: return;
     }
   if (params & BITS_8)
@@ -373,7 +467,8 @@ int	port,leavedtr;
   char ch;
   switch (port)
     {
-      case 1:	ch = inportb(PIC_MASK);	/* Get 8259A (PIC) Mask */
+      case 1: case 3:
+      		ch = inportb(PIC_MASK);	/* Get 8259A (PIC) Mask */
 		ch |= INT_MASK_1;	/* Set Interrupt Mask COM1 */
 		outportb(PIC_MASK,ch);	/* Write int. mask to 8259A*/
 
@@ -388,7 +483,8 @@ int	port,leavedtr;
 
 		setvect(COM_INT_1,old_c1);/* Restore COM1 int */
 		break;
-      case 2:	ch = inportb(PIC_MASK);	/* Get 8259A (PIC) Mask */
+      case 2: case 4:
+      		ch = inportb(PIC_MASK);	/* Get 8259A (PIC) Mask */
 		ch |= INT_MASK_2;	/* Set Interrupt Mask COM1 */
 		outportb(PIC_MASK,ch);	/* Write int. mask to 8259A*/
 
@@ -415,7 +511,8 @@ int	port,leavedtr;
   int dataport;
   switch (port)
     {
-      case 1:	dataport = *((int far *)0x400L);
+      case 1: case 3:
+      		dataport = comports[port - 1];
 		outportb (dataport + COM_LCR,Com1Buf.oldlcr & 0x7F);
 		outportb (dataport + COM_IER,Com1Buf.oldier);
 		outportb (dataport + COM_LCR,Com1Buf.oldlcr | 0x80);
@@ -425,7 +522,8 @@ int	port,leavedtr;
 		  Com1Buf.oldmcr |= 0x01;	/* Leave DTR in a high state */
 		outportb (dataport + COM_MCR,Com1Buf.oldmcr);
       		break;
-      case 2:	dataport = *((int far *)0x402L);
+      case 2: case 4:
+      		dataport = comports[port - 1];
 		outportb (dataport + COM_LCR,Com2Buf.oldlcr & 0x7F);
 		outportb (dataport + COM_IER,Com2Buf.oldier);
 		outportb (dataport + COM_LCR,Com2Buf.oldlcr | 0x80);
@@ -456,11 +554,13 @@ unsigned char ch;
 {
   switch (port)
     {
-      case 1:	outportb (Com1Buf.dataport + COM_MCR,0x0B |
+      case 1: case 3:
+      		outportb (Com1Buf.dataport + COM_MCR,0x0B |
 				Com1Buf.testbit);	/* Raise DTR */
 		dosend (Com1Buf.dataport,Com1Buf.statport,ch);
 		break;
-      case 2:	outportb (Com2Buf.dataport + COM_MCR,0x0B |
+      case 2: case 4:
+      		outportb (Com2Buf.dataport + COM_MCR,0x0B |
 				Com2Buf.testbit);	/* Raise DTR */
 		dosend (Com2Buf.dataport,Com2Buf.statport,ch);
 		break;
@@ -475,9 +575,11 @@ int	port;
   int dataport;
   switch (port)
     {
-      case 1: dataport = *((int far *)0x400L);	/* Get dataport address */
+      case 1: case 3:
+      	      dataport = comports[port - 1];	/* Get dataport address */
       	      return ((inportb (dataport + COM_MSR) & 0x80) != 0);
-      case 2: dataport = *((int far *)0x402L);	/* Get dataport address */
+      case 2: case 4:
+              dataport = comports[port - 1];	/* Get dataport address */
       	      return ((inportb (dataport + COM_MSR) & 0x80) != 0);
       default: return 0;
     }
@@ -489,8 +591,10 @@ int	port;
 {
   switch (port)
     {
-      case 1: return ((inportb (Com1Buf.dataport + COM_MSR) & 0x20) != 0);
-      case 2: return ((inportb (Com2Buf.dataport + COM_MSR) & 0x20) != 0);
+      case 1: case 3:
+      		return ((inportb (Com1Buf.dataport + COM_MSR) & 0x20) != 0);
+      case 2: case 4:
+      		return ((inportb (Com2Buf.dataport + COM_MSR) & 0x20) != 0);
       default: return 0;
     }
 }
@@ -503,10 +607,12 @@ int	port;
 {
   switch (port)
     {
-      case 1: outportb (Com1Buf.dataport + COM_MCR,0x0B |
+      case 1: case 3:
+      	      outportb (Com1Buf.dataport + COM_MCR,0x0B |
       				Com1Buf.testbit);	/* Raise DTR */
       	      return ((inportb (Com1Buf.statport) & 0x20) != 0);
-      case 2: outportb (Com2Buf.dataport + COM_MCR,0x0B |
+      case 2: case 4:
+      	      outportb (Com2Buf.dataport + COM_MCR,0x0B |
       				Com2Buf.testbit);	/* Raise DTR */
               return ((inportb (Com2Buf.statport) & 0x20) != 0);
       default: return 0;
@@ -519,9 +625,11 @@ int	port;
 {
   switch (port)
     {
-      case 1: outportb (Com1Buf.dataport + COM_MCR,0x0A |
+      case 1: case 3:
+      		outportb (Com1Buf.dataport + COM_MCR,0x0A |
 				Com1Buf.testbit); break;
-      case 2: outportb (Com2Buf.dataport + COM_MCR,0x0A |
+      case 2: case 4:
+      		outportb (Com2Buf.dataport + COM_MCR,0x0A |
 				Com2Buf.testbit); break;
     }
 }
@@ -532,9 +640,11 @@ int	port;
 {
   switch (port)
     {
-      case 1: outportb (Com1Buf.dataport + COM_MCR,0x0B |
+      case 1: case 3:
+      		outportb (Com1Buf.dataport + COM_MCR,0x0B |
 				Com1Buf.testbit); break;
-      case 2: outportb (Com2Buf.dataport + COM_MCR,0x0B |
+      case 2: case 4:
+      		outportb (Com2Buf.dataport + COM_MCR,0x0B |
 				Com2Buf.testbit); break;
       default: break;
     }
@@ -546,10 +656,12 @@ int	port,value;
 {
   switch (port)
     {
-      case 1: outportb (Com1Buf.dataport + COM_LCR,
+      case 1: case 3:
+      	      outportb (Com1Buf.dataport + COM_LCR,
 		(value ? inportb (Com1Buf.dataport + COM_LCR) | 0x40
 		       : inportb (Com1Buf.dataport + COM_LCR) & 0xBF));
-      case 2: outportb (Com2Buf.dataport + COM_LCR,
+      case 2: case 4:
+      	      outportb (Com2Buf.dataport + COM_LCR,
 		(value ? inportb (Com2Buf.dataport + COM_LCR) | 0x40
 		       : inportb (Com2Buf.dataport + COM_LCR) & 0xBF));
       default: break;
@@ -564,14 +676,16 @@ int	port;
   int ch;
   switch (port)
     {
-      case 1:	/* Restore the serial port interrupts for COM1 */
+      case 1: case 3:
+      		/* Restore the serial port interrupts for COM1 */
 		outportb(Com1Buf.dataport + COM_IER,1);
 		outportb(Com1Buf.dataport + COM_MCR,0x0B);
 		ch = inportb(PIC_MASK);	/* Read current mask */
 		ch &= (0xFF^INT_MASK_1);/* Reset mask for COM1 */
 		outportb(PIC_MASK,ch);	/* Send it to the 8259A */
 		break;
-      case 2:	/* Restore the serial port interrupts for COM2 */
+      case 2: case 4:
+      		/* Restore the serial port interrupts for COM2 */
 		outportb(Com2Buf.dataport + COM_IER,1);
 		outportb(Com2Buf.dataport + COM_MCR,0x0B);
 		ch = inportb(PIC_MASK);	/* Read current mask */

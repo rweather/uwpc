@@ -40,6 +40,8 @@ The source code for the Unix Windows server from John Bruner is in the
 I have cleaned up the code and checked in the source code for all
 MS-DOS versions.  Branches in the repository called "uwpc-x.xx" are
 provided for each major release I was able to recover from my archives.
+I am currently missing the source code for versions 1.00, 1.05, and 2.02,
+but everything else is available.
 
 The original MS-DOS code was designed to be built with Turbo C++.
 I switched to Borland C++ for the later Windows version.  You will need

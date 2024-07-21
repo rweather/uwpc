@@ -1,0 +1,403 @@
+		       Termcap Compiler Version 1.01
+
+	             Copyright (C) 1991 Rhys Weatherley
+
+1. INTRODUCTION
+
+The Termcap Compiler is a tool for creating new terminal emulations for use
+with UW/PC (versions 2.00 and higher).  It takes source code in the form of an
+abstract assembly code and compiles them into binary terminal descriptions that
+UW/PC can use to provide new types of terminal emulations.  The standard UW/PC
+terminal types are included as examples of the assembly code versions of the
+terminal descriptions in the files VT52.CAP, ADM31.CAP and ANSI.CAP in the
+source code archive UW-SRC.ZIP.
+
+2. USING THE TERMCAP COMPILER.
+
+The Termcap Compiler "TERMCC" accepts assembly code from the filename supplied
+as an argument and writes the resultant compiled terminal description to the
+supplied output file or a file with the same path and name as the input file,
+but with a ".TRM" extension.  The full command syntax is:
+
+	TERMCC infile[.CAP] [outfile[.TRM]]
+
+3. USING NEW TERMINAL DESCRIPTIONS WITH UW/PC.
+
+This section explains how you can add terminal descriptions you have written
+and compiled to UW/PC so that it will use them during communications.  This
+is also explained in "UW.DOC", but is repeated here for convenience.
+
+In the configuration file "UW.CFG" for UW/PC the following configuration
+options can be specified:
+
+	emul (default adm31)
+
+		The default terminal emulation type to use for windows.
+		When a new window is created, it will use this emulation
+		type.  This can be one of adm31, vt52, or ANSI or a string
+		(e.g. "vt102"), signifying a currently loaded terminal
+		description that will be searched for to become the
+		default emulation.  The double quotes are optional.
+		When the terminal description is searched for, case is
+		ignored during compares.
+
+	emul0 (defaults to whatever emul is set to)
+
+		Set the terminal emulation type for protocol 0.  This is
+		to rectify some problems with UNIX termcap entries that
+		are missing the entry for ADM31 terminals, as discussed 
+		above under "USING UW/PC".  It can be one of adm31, vt52
+		or ansi or a string specifying a terminal type loaded
+		with the "terminal" configuration option.
+
+	terminal (no default)
+
+		This can appear up to five times in the configuration file
+		and each occurrence will load a terminal description into
+		memory.  It's string value specifies a filename for a
+		compiled terminal description.  The full pathname should be
+		supplied.  For example, the following line could be added to
+		the configuration file to add a "VT102" terminal emulation:
+
+			terminal="c:\uw\vt102.trm"
+
+		The standard VT52, ADM31 and ANSI terminal types can be
+		replaced with new terminal descriptions by loading new
+		files that have the VT52, ADM31 or ANSI terminal type
+		specified.
+
+4. THE ABSTRACT MACHINE.
+
+UW/PC uses a small interpretive abstract machine to decode compiled terminal
+descriptions on the fly while performing communications.  Its overhead is
+small enough not to have a significant impact on the performance of UW/PC.
+This abstract machine has a number of registers that can be accessed from
+the assembly code described in the next section.
+
+	accumulator	- This is the primary control register.  It holds
+			  16 bit signed values.
+	x register	- This is an auxillary register, primarily used for
+			  cursor positioning during terminal emulation.  It
+			  holds 16 bit signed values.
+	y register	- This is an auxillary register, primarily used for
+			  cursor positioning during terminal emulation.  It
+			  holds 16 bit signed values.
+	comparator	- After a comparison instruction, this register will
+			  hold a value that is inspected during the conditional
+			  jump instructions.  Its (16 bit) value cannot be
+			  directly accessed.
+	flags		- This is a 16 bit quantity that allows you to record
+			  up to 16 single bit flags that may be useful for
+			  recording such information as whether the terminal's
+			  insertion mode is on or off, etc.
+	saved x reg	- An auxillary register that can be used to save the
+			  terminal's current X cursor co-ordinate.  It's value
+			  cannot be directly accessed, except through the
+			  "savexy", "restxy" and "getxy" instructions.
+	saved y reg	- An auxillary register that can be used to save the
+			  terminal's current Y cursor co-ordinate.  It's value
+			  cannot be directly accessed, except through the
+			  "savexy", "restxy" and "getxy" instructions.
+	saved attribute	- An auxillary register that can be used to save the
+			  terminal's current printing attribute.  It's value
+			  cannot be directly accessed, except through the
+			  "saveattr" and "restattr" instructions.
+	argument array	- An array of eight 16-bit quantities that can be used
+			  to store arguments to escape sequences for emulations
+			  such as ANSI and VT102 which have variable numbers of
+			  arguments for their escape sequences.
+	number of args	- A 16-bit quantity that normally records how many
+			  arguments are in the argument array.  It can also
+			  be used as a loop counter.
+
+5. ASSEMBLY INSTRUCTIONS.
+
+This section describes the format of the assembly source file, and the various
+instructions that can be used to create terminal descriptions.
+
+The source file can contain comments that begin with "//" and continue to the
+end of the line (like in C++), and it must begin with a "name" instruction,
+although this is not checked by the compiler.  There is no fixed format for
+the instructions except that labels cannot occur between an instruction's
+name and its arguments.  Other than that, an instruction can appear in any
+way with any amount of white space and comments surrounding its name and
+arguments, and any number of instructions and labels can appear on the one
+line or wrapped across lines.  Despite this, it is better to only place one
+instruction on each line with an optional label preceding it, as shown in the
+example terminal descriptions.
+
+Labels consist of an alphanumeric identifier (that must not be an instruction
+name) and a colon.  The two labels "start" and "keys" must be present in the
+source file.  "start" indicates where the decoding for output to the terminal
+screen begins, and "keys" indicates where the decoding of special keycodes
+(for example terminal function keys) begins.  Without these labels, UW/PC
+cannot process the terminal description properly.
+
+	add	- Adds the instruction's argument to the accumulator.
+		  The argument can be numeric, "width" or "height".
+
+	bell	- Ring the terminal bell.
+
+	bs	- Move the cursor back one character.  The cursor will
+		  not wrap around to the previous line if it is at the
+		  start of the current line.
+
+	bswrap	- Move the cursor back one character and wrap around to
+		  the end of the previous line if necessary.  If the cursor
+		  is in the top-left screen position, it won't be moved.
+
+	clear	- Clear the entire screen to the current scrolling attribute.
+		  The cursor is not moved from its current position.
+
+	clreol	- Clear to the end of the current line in the current
+		  scrolling attribute.
+
+	clreos	- Clear to the end of the screen from the current cursor
+		  position in the current scrolling attribute.
+
+	clrsol	- Clear to the start of the current line in the current
+		  scrolling attribute.  The current cursor position is
+		  not cleared.
+
+	clrsos	- Clear to the start of the screen from the current
+		  cursor position in the current scrolling attribute.
+		  The current cursor position is not cleared.
+
+	cmp	- Compares the instruction's argument to the accumulator.
+		  The argument can be numeric, "width" or "height".  The
+		  comparator will be set to reflect the result of the
+		  comparison.
+
+	cr	- Move the cursor to the start of the current line.
+
+	dec	- Decrement the number of arguments and compare it with zero,
+		  putting the result of the comparison into the comparator.
+
+	delchar	- Delete the character at the current screen position,
+		  moving all following characters left one place and
+		  clearing the last position on the line in the current
+		  scrolling attribute.
+
+	delline	- Delete the current line and scroll the screen up.
+
+	endkeys	- Marks the end of the key definition table.
+
+	escape	- Unused at present - takes a numeric argument and specifies
+		  and index to use in an "escape" table which isn't currently
+		  implemented.  This is a convenient way to extend the
+		  language without changing the TERMCC program - only the
+		  main UW/PC program needs to be modified to recognise the
+		  escape sequences.  It is suggested that you do not use
+		  this because it may change in different versions of the
+		  program.
+
+	geta	- Gets an argument from the argument array.  This instruction's
+		  first argument (1..8) specifies the argument to get and its
+		  second argument specifies an 8-bit default value to use if
+		  the argument in the argument array is not set.
+
+	getarg	- Gets an argument from the remote host.  It is assumed to
+		  be the ASCII representation of a number.  The number will
+		  be placed into the next argument position and the
+		  accumulator will return the character that follows the
+		  number in the stream from the remote host.
+
+	getch	- This instruction will wait until the next character is
+		  received from the remote host, which it will place into
+		  the accumulator, and then it will continue execution.
+
+	getx	- Get the value of the X register and place it into the
+		  accumulator.
+
+	getxy	- Get the current cursor position and place it into the
+		  X and Y registers.  This is mainly used to get a cursor
+		  position prior to moving it about the screen.
+
+	gety	- Get the value of the Y register and place it into the
+		  accumulator.
+
+        insblank - Insert a blank character without moving the cursor.
+
+	inschar	- Insert the accumulator at the current screen position,
+		  moving all present characters one position to the right.
+		  If an insertion is performed at the right-most position,
+		  then this instruction has the same effect as "send".
+
+	insline	- Insert a new blank line before the current screen line.
+
+	ja	- Jump to the label given as an argument if the result of
+		  the last comparison using "cmp" was that the accumulator
+		  was above (greater than) the comparison value.
+
+	jae	- Jump to the label given as an argument if the result of
+		  the last comparison using "cmp" was that the accumulator
+		  was greater than or equal to the comparison value.
+
+	jb	- Jump to the label given as an argument if the result of
+		  the last comparison using "cmp" was that the accumulator
+		  was below (less than) the comparison value.
+
+	jbe	- Jump to the label given as an argument if the result of
+		  the last comparison using "cmp" was that the accumulator
+		  was less than or equal to the comparison value.
+
+	je	- Jump to the label given as an argument if the result of
+		  the last comparison using "cmp" was that the accumulator
+		  was equal to the comparison value.
+
+	jne	- Jump to the label given as an argument if the result of
+		  the last comparison using "cmp" was that the accumulator
+		  was not equal to the comparison value.
+
+	jmp	- Jump unconditionally to the label given as an argument.
+
+	jsr	- Jump to a subroutine at the label given as an argument.
+		  Subroutines can only be nested up to 10 levels deep.  If
+		  you go any deeper, it is not checked (for speed) and
+		  strange things may occur.
+
+	key	- Takes two arguments separated by a comma.  The first is
+		  an IBM keyboard scan code indicating a key to be mapped
+		  to the second argument which is a string of characters to
+		  be sent to the remote host when that key is pressed.  Use
+		  this to define the characters to send for arrow and function
+		  keys in a terminal emulation.  It is assumed that the
+		  label "keys" is followed by zero or more "key" instructions
+		  and terminated with a "endkeys" instruction so that UW/PC
+		  can find the key definitions.  No other instructions must
+		  appear in the "keys" section otherwise strange things may
+		  happen.
+
+	load	- Loads the instruction's argument into the accumulator.
+		  The argument can be numeric, "width" or "height".
+
+	lf	- Move the cursor down one line on the screen, staying
+		  in the same column.  At the bottom of the screen, the
+		  screen is scrolled up one line.
+
+	move	- Move the cursor to the position denoted by the X and Y
+		  registers.  The screen origin is at (0,0).  If the
+		  position is off-screen, the cursor is not moved.
+
+	name	- Takes a string argument that specifies the name of the
+		  terminal emulation.  This must be the first instruction
+		  in the terminal description, but this is not checked.
+
+	remote	- Send the value in the accumulator to the remote host.
+
+	restattr - Restore the current printing attribute that was saved
+		  by using "saveattr".
+
+	resarr	- Resets the argument array.  All arguments will be marked
+		  as "default value", the argument counter will be set
+		  to zero, and the "shift" instruction value will be set
+		  to zero.
+
+	reset	- Takes a numeric argument which is a number between 0 and
+		  15 that indicates a bit in the flags register to be reset.
+
+	restxy	- Restore the current cursor position from the saved X and
+		  Y registers.  The values may be saved by the "savexy"
+		  instruction.
+
+	ret	- Return from the current subroutine.  If you go up past
+		  the first return address on the return stack then it
+		  is not checked (for speed) and strange things may occur.
+
+	saveattr - Save the current printing attribute so it can be later
+		  restored using "restattr".
+
+	savexy	- Save the current cursor position in the saved X and Y
+		  registers.  The values may be restored by the "restxy"
+		  instruction.
+
+	scrldn	- Scroll the entire screen down one line, leaving the cursor
+		  at its current position and filling the top line in
+		  the scrolling attribute.
+
+	scrlup	- Scroll the entire screen up one line, leaving the cursor
+		  at its current position and filling the bottom line in
+		  the scrolling attribute.
+
+	send	- Send the accumulator to the screen.  When the cursor
+		  reaches the right-hand side of the screen, it will
+		  automatically wrap to the start of the next line, and
+		  will scroll the screen as necessary.
+
+	send52	- Send the accumulator to the screen.  When the cursor
+		  reaches the right-hand side of the screen, it will
+		  stay at that position until the next invocation of
+		  "send" or "send52".  It got this name because this is
+		  what the VT52 terminal type does.
+
+	set	- Takes a numeric argument which is a number between 0 and
+		  15 that indicates a bit in the flags register to be set.
+
+	setattr	- Set the current printing attribute.  If a numeric
+		  argument is supplied then the attribute is set from
+		  the global attribute table (see below).  Otherwise,
+		  the current accumulator value is used as the attribute.
+		  The indexes into the global attribute table are:
+
+		  	0 - Normal printing attribute.
+			1 - Inverse printing attribute.
+			2 - Highlighting attribute - usually "bold".
+			3 - Normal attribute on the status line.
+			4 - Highlighting attribute for the status line.
+
+	setscrl	- Set the current scrolling attribute.  If a numeric
+		  argument is supplied then the attribute is set from
+		  the global attribute table (see above).  Otherwise,
+		  the current accumulator value is used as the attribute.
+
+	setc	- Set the number of arguments directly from the accumulator.
+		  This is useful to use the number of arguments register as
+		  a counter in loops, decrementing it with "dec" each time
+		  through a loop.  The argument array is not modified, and
+		  "geta" and "shift" can still be used to step through the
+		  array to get the arguments.
+
+	setx	- Places the value of the accumulator in the X register.
+
+	sety	- Places the value of the accumulator in the Y register.
+
+	shift	- Shift the arguments back one.  Using a "geta" instruction
+		  after this instruction will get the "n + 1"th argument.
+		  e.g. in "geta 1,1 shift geta 1,1", the second "geta"
+		  instruction will get the argument following the first.
+		  The "resarr" instruction will move everything back to the
+		  start of the argument array.
+
+	sub	- Subtracts the instruction's argument from the accumulator.
+		  The argument can be numeric, "width" or "height".
+
+	switch	- Extended comparison instruction that ends with "endsw".
+		  Between "switch" and "endsw" are placed value and
+		  jump label pairs.  For example:
+
+			switch
+			  0x00,start
+			  '\r',crproc
+			  '\n',lfproc
+			  '\b',bsproc
+			  '\t',tabproc
+			  0x07,bellproc
+			  0x1B,escproc
+			endsw
+
+		  The "switch" instruction will try to match each value
+		  against the accumulator in turn, and will jump to the
+		  associated label of the first matching value.  If no
+		  values match, then execution will continue after the
+		  "endsw" instruction.
+
+	tab	- Move the cursor to the next tabstop.  Tabstops are
+		  placed every 8 characters, and the cursor will wrap to
+		  the start of the next line and will scroll the screen
+		  as necessary.
+
+	test	- Takes a numeric argument which is a number between 0 and
+		  15 that indicates a bit in the flags register to be tested.
+		  The comparator is set to a non-zero value if the flag bit
+		  is set, and zero if it is reset.  The comparator can then
+		  be tested with "je" (for reset) and "jne" (for set).

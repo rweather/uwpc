@@ -1,9 +1,7 @@
 /*-----------------------------------------------------------------------------
 
-   COMMS.H - Serial Communications Routines for Turbo C/C++
-
-    NOTE: COM1 and COM3 cannot be used simultaneously and COM2 and COM4
-    cannot be used simultaneously.
+   COMMTEST.C - Testing version of the Communications Library.  This simulates
+   		the COM ports without actually doing anything.
 
     This file is part of UW/PC - a multi-window comms package for the PC.
     Copyright (C) 1990-1991  Rhys Weatherley
@@ -27,124 +25,126 @@
 
     Version  DD/MM/YY  By  Description
     -------  --------  --  ---------------------------------------------------
-      1.0    ??/09/90  RW  Original version of COMMS.H
-      1.1    10/11/90  RW  Added ability to call comcarrier before comenable,
-      			   support for 57600 baud and automatic raising of
-			   the DTR signal.
-      1.2    17/11/90  RW  Add 'leavedtr' parameter to "comrestore".
-      1.3    17/03/91  RW  Create 'comfix' to fix DOS shell-out bug.
-      1.4    21/03/91  RW  Fix minor problem with sign extension in comreceive.
-      1.5    22/03/91  RW  Fix COM port addressing & add COM3/COM4 support.
+      1.0    11/04/91  RW  Original version of COMMTEST.C
 
 -----------------------------------------------------------------------------*/
 
-#ifndef	__COMMS_H__
-#define	__COMMS_H__
+#include "comms.h"		/* Declarations for this module */
 
-/* Defines for various port parameters */
-
-#define BAUD_RATE	0x0F		/* Mask to extract baud rate */
-#define	BAUD_110	0		/* Baud rates */
-#define	BAUD_150	1
-#define BAUD_300	2
-#define	BAUD_600	3
-#define	BAUD_1200	4
-#define BAUD_2400	5
-#define	BAUD_4800	6
-#define	BAUD_9600	7
-#define	BAUD_19200	8
-#define BAUD_38400	9
-#define BAUD_57600	10
-#define	BAUD_115200	11
-
-#define	BITS_7		0x00		/* Data bits */
-#define	BITS_8		0x10
-
-#define STOP_1		0x00		/* Stop bits */
-#define STOP_2		0x20
-
-#define PARITY_GET	0xC0		/* Mask to extract parity */
-#define PARITY_NONE	0x00		/* Parity modes */
-#define	PARITY_ODD	0x40
-#define PARITY_EVEN	0x80
-
-#ifdef	__STDC__
-#define	_Cdecl
-#else
-#define	_Cdecl	cdecl
-#endif
-
-#ifdef	__cplusplus
-extern	"C" {
-#endif
+#pragma	warn	-par		/* Turn off annoying warnings */
 
 /* Define the port addresses for the 4 serial ports. */
 /* These can be changed by the caller if necessary.  */
-extern	int	_Cdecl	comports[4];
+int	_Cdecl	comports[4] = {0,0,0,0};
 
 /* Enable a COM port for Interrupt Driven I/O by this module */
-void	_Cdecl	comenable (int port);
+void	_Cdecl	comenable (int port)
+{
+  /* Nothing to be done here - just ignore the request */
+} /* comenable */
 
 /* Save the current setting of a COM port to be restored later */
 /* Call this function before calling 'comenable' on the port.  */
-void	_Cdecl	comsave (int port);
+void	_Cdecl	comsave (int port)
+{
+  /* Nothing to be done here - just ignore the request */
+} /* comsave */
 
 /* Set the communications parameters for a COM port */
-void	_Cdecl	comparams (int port,int params);
+void	_Cdecl	comparams (int port,int params)
+{
+  /* Nothing to be done here - just ignore the request */
+} /* comparams */
 
 /* Disable the interrupt I/O for a COM port */
 /* If 'leavedtr' != 0, then leave DTR up    */
-void	_Cdecl	comdisable (int port,int leavedtr);
+void	_Cdecl	comdisable (int port,int leavedtr)
+{
+  /* Nothing to be done here - just ignore the request */
+} /* comdisable */
 
 /* Restore the setting of a COM port - after 'comdisable'    */
 /* If 'leavedtr' is non-zero the keep DTR set no matter what */
-void	_Cdecl	comrestore (int port,int leavedtr);
+void	_Cdecl	comrestore (int port,int leavedtr)
+{
+  /* Nothing to be done here - just ignore the request */
+} /* comrestore */
 
 /* Turn a COM port's test loop-back mode on or off */
 /* NOTE: comenable always turns the loop-mode off  */
-void	_Cdecl	comtest (int port,int on);
+void	_Cdecl	comtest (int port,int on)
+{
+  /* Nothing to be done here - just ignore the request */
+} /* comtest */
 
 /* Return the number of available input chars on a COM port */
 /* Will raise the DTR signal if it is not already raised.   */
-int	_Cdecl	comavail (int port);
+int	_Cdecl	comavail (int port)
+{
+  return (0);		/* Nothing is ever received by these routines */
+} /* comavail */
 
 /* Flush all input from the COM port */
-void	_Cdecl	comflush (int port);
+void	_Cdecl	comflush (int port)
+{
+  /* Nothing to be done here - just ignore the request */
+} /* comflush */
 
 /* Receive a character from the COM port: -1 if not ready */
 /* Will raise the DTR signal if it is not already raised. */
-int	_Cdecl	comreceive (int port);
+int	_Cdecl	comreceive (int port)
+{
+  return (-1);		/* Return "no character available" signal */
+} /* comreceive */
 
 /* Test to see if the COM port is ready for a new */
 /* character to transmit.  Will raise the DTR     */
 /* signal if it is not already raised.		  */
-int	_Cdecl	comready (int port);
+int	_Cdecl	comready (int port)
+{
+  return (1);		/* Return that the COM port is always ready */
+} /* comready */
 
 /* Output a character to a COM port.  Will raise */
 /* the DTR signal if it is not already raised.   */
-void	_Cdecl	comsend (int port,int ch);
+void	_Cdecl	comsend (int port,int ch)
+{
+  /* Nothing to be done here - just ignore the request */
+} /* comsend */
 
 /* Test to see if a carrier is present - can be called before comenable */
-int	_Cdecl	comcarrier (int port);
+int	_Cdecl	comcarrier (int port)
+{
+  return (1);		/* Imitate an available carrier signal */
+} /* comcarrier */
 
 /* Test to see if the DSR (Data Set Ready) signal is present */
-int	_Cdecl	comdsr (int port);
+int	_Cdecl	comdsr (int port)
+{
+  return (1);		/* Imitate an available DSR signal */
+} /* comdsr */
 
 /* Drop the DTR signal on a COM port */
-void	_Cdecl	comdropdtr (int port);
+void	_Cdecl	comdropdtr (int port)
+{
+  /* Nothing to be done here - just ignore the request */
+} /* comdropdtr */
 
 /* Raise the DTR signal on a COM port */
-void	_Cdecl	comraisedtr (int port);
+void	_Cdecl	comraisedtr (int port)
+{
+  /* Nothing to be done here - just ignore the request */
+} /* comraisedtr */
 
 /* Set the BREAK pulse on a COM port to 0 or 1 */
-void	_Cdecl	combreak (int port,int value);
+void	_Cdecl	combreak (int port,int value)
+{
+  /* Nothing to be done here - just ignore the request */
+} /* combreak */
 
 /* Restore a COM port after a DOS shell-out, since */
 /* a program may have disabled interrupts, etc.    */
-void	_Cdecl	comfix (int port);
-
-#ifdef	__cplusplus
-}
-#endif
-
-#endif	/* __COMMS_H__ */
+void	_Cdecl	comfix (int port)
+{
+  /* Nothing to be done here - just ignore the request */
+} /* comfix */

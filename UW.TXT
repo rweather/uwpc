@@ -1,12 +1,12 @@
-			    UW/PC Version 1.04
+			    UW/PC Version 2.00
 
 			     Rhys Weatherley
 
-			      January 1991
+			        March 1991
 
 1. INTRODUCTION
 
-This is version 1.04 of UW/PC, a multiple-window interface to UNIX for
+This is version 2.00 of UW/PC, a multiple-window interface to UNIX for
 IBM-PC's and compatible computers.  This program is based on a program
 written for the Macintosh by John Bruner.  It provides up to seven
 separate login sessions on the remote UNIX machine, and requires the
@@ -23,12 +23,16 @@ can be found in the directory "info-mac/unix" on "ditmela.mel.dit.csiro.au"
 [128.250.90.81].  A copy of the server source code without the Macintosh
 program binaries is included in this release.
 
-Version 1.04 is a bug fix release, and comments are invited to the author.
-It implements the Unix Windows protocols 0 and 1.  Protocol 2 (with
-more control over window management) was not implemented because of the nature
-of the IBM-PC's display technology.  A Windows 3.0 version is a possible
-future project, but was not tackled initially because of time and resource
-constraints.
+Version 2.00 of UW/PC is a total rewrite of the previous version (1.05) in
+C++ to give a better program structure for the upcoming enhancements to UW/PC.
+Comments are invited to the author.  This version implements the Unix Windows
+protocols 0 and 1.  Protocol 2 (with more control over window management) is
+going to be supported in an upcoming Windows 3.0 version, however some small
+parts of Protocol 2 are present in this version which make Protocol 1 start
+faster.  Protocol 2 is not fully supported in the DOS versions because of the
+complexity of the windowing code that is necessary.  This version includes a
+terminal emulation compiler for creating new terminal types using a small
+assembly-code like language.  It is described in the file TERMCC.DOC.
 
 UW/PC is distributed under the terms of the GNU General Public License
 (version 1), a copy of which is included.  Note however that the server
@@ -50,23 +54,36 @@ The following files should be present in the UW/PC distribution:
 	UW.DOC		This documentation file.
 	UWEG.CFG	An example configuration file - rename to
 			UW.CFG to use this file.
+	TERMCC.EXE	A compiler for creating new terminal types.
+	TERMCC.DOC	Documentation for TERMCC.EXE.
 	SETMODE.COM	A useful screen mode setting utility.
 	HISTORY		History of UW/PC versions.
-	UW-SRC.ZIP	The source code for UW/PC for Turbo C/C++.
+	UW-SRC.ZIP	The source code for UW/PC and TERMCC.
 	UWSERVER.TAR	The source code for the UNIX server.
 
 SETMODE was included to assist with configuration of the screen colours
 (see "CONFIGURING UW/PC" later).  The Macintosh binaries have been stripped
 from the server, and can be obtained from one of the FTP sites mentioned
-above if desired.
+above if desired.  The source code in UWSERVER.TAR should be compiled on
+the UNIX host to allow the full potential of UW/PC to be used.
 
-3. USING UW/PC
+3. READ THIS IF YOU ARE HAVING TROUBLE
+
+If you are having trouble getting UW/PC to go, especially with the UW server
+program, then exit UW/PC and start it again with the "-debug" option.
+i.e. "uw -debug".  Then, every character that is sent from the remote machine
+will be placed into the file "UWDEBUG.OUT" in the current directory.  Upload
+this file to the UNIX machine in binary mode (in some way), uuencode it and
+send it to me via e-mail.  This will help me to know EXACTLY what you are
+doing, and so I may be able to find the bugs more easily.
+
+4. USING UW/PC
 
 When UW/PC starts, it initialises the screen and serial port, and then
 enters "Protocol 0", which is equivalent to the dumb terminal emulations
 available in conventional communications programs.  The default emulation
-is ADM31, but VT52 emulation is also available.  A number of special
-keystrokes are defined in protocol 0:
+is ADM31, but VT52 and ANSI emulations are also available.  A number of
+special keystrokes are defined in protocol 0:
 
 	ALT-B - Send a line break over the serial link.  CTRL-BREAK and
 		CTRL-END will also send a line break.
@@ -79,16 +96,15 @@ keystrokes are defined in protocol 0:
 		carrier signal is present.
 	ALT-J - Jump to a DOS shell.  Type "EXIT" at the DOS prompt to
 		return UW/PC.
-	ALT-R - Receive an ASCII file from the remote host.  You will
-		be prompted for a filename to place the data in.  When
-		the data has been transferred, press ESC to abort the
-		transfer.
-	ALT-S - Send the contents of an ASCII file to the remote host.
-		Lines will be terminated with carriage-return characters
-		only, and there is a 0.1 second pause between lines
-		to allow the remote host some time to "catch-up".  You
-		will be prompted for the filename to transfer.  Press
-		ESC to abort the transfer at any time.
+	ALT-L - Start and stop an ASCII capture.  You will be prompted
+		for a file name to store all data coming from the remote
+		host in until you press ALT-L again.  If you have the
+		status line set to display the terminal type then it
+		will change to "CAP" while the capture is in effect.
+	ALT-R - Receive a file from the remote host.  See UPLOADS AND
+		DOWNLOADS below.
+	ALT-S - Send the contents of a file to the remote host.  See
+		UPLOADS AND DOWNLOADS below.
 	ALT-U - Send the string defined by the "uw" configuration
 		variable.  This is useful once connected to start the
 		UW server on the UNIX host.  See "CONFIGURING UW/PC"
@@ -109,7 +125,7 @@ set correctly (see below).  Note that the server must be compiled and
 accessible for you to do this.
 
 The UW server sends a special control sequence which UW/PC interprets
-and automatically starts the multi-window session.  By default the
+and then automatically starts the multi-window session.  By default the
 server will also create a terminal window.  See the documentation that
 accompanies the server for information on modifying its behaviour. Once
 UW/PC has entered the multi-window session (protocol 1), up to 7 windows
@@ -149,7 +165,7 @@ UW server will set the TERMCAP environment variable within a UW session
 window, but in protocol 0 this environment variable is not set automatically.
 To use ADM31 emulation in protocol 0 on machines without the correct termcap
 entry, set the TERMCAP environment variable to the following string (newlines
-and spaces are for layout only, and shouldn't appear in the actual value):
+are for layout only, and shouldn't appear in the actual value):
 
 	adm31:cr=^M:do=^J:nl=^J:al=\EE:am:le=^H:bs:ce=\ET:
 	cm=\E=%+ %+ :cl=^Z:cd=\EY:co#80:dc=\EW:dl=\ER:
@@ -160,7 +176,9 @@ allow you to use VT52 emulation in protocol 0, which is usually defined
 in all termcap and terminfo entries.  ADM31 emulation will still be used
 for UW session windows if the "emul" variable is set to "adm31".  ADM31
 emulation is much "smarter" than VT52, so you will probably want to use
-it wherever possible.
+it wherever possible.  ANSI emulation is also available and this is much
+smarter than ADM31, but because the UW server defaults to ADM31, you
+may still want to use it instead of ANSI.
 
 All of the special protocol 0 keystrokes except ALT-U also work in protocol
 1, but it is inadvisable to use ALT-I during a UW session.  ALT-H will still
@@ -169,7 +187,56 @@ any active UW session before sending the BREAK pulse.  This avoids some
 strange things that may occur with network terminal servers and the like.
 ALT-X will also terminate a UW session before exiting UW/PC.
 
-4. USING UW/PC WITH OTHER PROGRAMS
+5. UPLOADS AND DOWNLOADS
+
+UW/PC has ASCII and XMODEM file transfers built-in and it can also use the
+program DSZ (which you need to obtain separately) to perform ZMODEM transfers.
+ZMODEM file transfers are disabled in protocol 1 (the multi-window mode)
+because DSZ is incompatible with the UW protocol.  It should be noted however,
+that because of deficencies in the UW server, you probably won't be able to
+run more than one XMODEM transfer at the same time.  This stems from the
+fact that if a lot of input or output is appearing in one window then all
+other windows will grind to a halt.  Except in the case of a ZMODEM receive,
+you will be prompted for the filename of the file to be transfered.  To use
+DSZ for ZMODEM transfers, you will need to have DSZ.COM somewhere in your
+PATH for it to be accessible.  Note that the DSZ command "ALT-N" will allow
+you to "nuke" a transfer and return to UW/PC.
+
+ASCII uploads will the send the contents of the text file to the remote
+machine, pausing 10 milliseconds between lines to allow the remote machine
+to catch up.  You need to make provisions for capturing the data at the
+other end.  Usually you can do this by executing the UNIX command
+"cat >filename" before you start the transfer, where "filename" is the
+file you want the data to end up in.  Once the transfer is complete, you
+can press CTRL-D to end the "cat" command's processing.  Pressing ESC will
+abort the transfer - all other keys will be processed as normal.
+
+ASCII downloads consist of placing all incoming data from the remote host
+into the nominated file.  Pressing ESC will abort the transfer, and all
+other keys are processed as normal.  Usually you type in "cat filename" at
+the UNIX command line (bot don't press RETURN yet), start the ASCII download,
+and then press RETURN to start it going.  Once it has finished you press
+ESC to abort the reception of characters.  ASCII capture (ALT-L) is similar
+to ASCII download, except ALT-L is used to abort the transfer.
+
+For XMODEM and ZMODEM transfers, you will need the "sx", "rx", "sz" and "rz"
+programs for UNIX compiled and available.  Read the manuals for these programs
+to get more information on their options.  For downloads, start the "sx" or
+"sz" programs on the remote machine and then press "ALT-R" to start the
+reception of the files.  Note that unlike some other communications programs,
+the ZMODEM "auto-download-start" command sequence is not recognised, and
+so you need to manually start the download.  For uploads, start the "rx" or
+"rz" programs on the remote machine and then press "ALT-S" to the start
+sending the nominated files.
+
+In the near future, UW/PC will be upgraded with a mini-FTP protocol that will
+allow you to transfer files between the remote machine and your PC using
+FTP-like commands.  This protocol will be more "aware" of the problems of
+performing multiple transfers when more than one window is active and will
+get around some other problems with transmission mediums that do not accept
+some characters - a character escape mode like Kermit will be available.
+
+6. USING UW/PC WITH OTHER PROGRAMS
 
 UW/PC can be used as a stand-alone communciations program, or in
 conjunction with some other communciations program.  If you have a
@@ -185,7 +252,7 @@ return to the other program.  It may also be possible for your program's
 scripting language to automatically execute the UW/PC program once a
 UNIX host connection has been made.
 
-5. CONFIGURING UW/PC
+7. CONFIGURING UW/PC
 
 When UW/PC starts up, it first inspects the file "UW.CFG" in the current
 directory, and if that doesn't exist, the file "UW.CFG" in the directory
@@ -198,10 +265,14 @@ argument.  Comments may be introduced starting with "#", but may not
 appear within commands.  The configurable parameters, which are all
 optional, and their defaults follow:
 
-	port (default 1)
+	address (defaults are the normal COM port addresses)
 
-		The serial port to be used for communications.  This can
-		be either 1 or 2.
+		This option allows you to change the hardware port address
+		to use for communication on the port specified by the "port"
+		configuration option.  This option must be specified in
+		decimal and should appear after the "port" option if that
+		is supplied.  The defaults for each of the four COM ports
+		are 0x3F8, 0x2F8, 0x3E8 and 0x2E8 respectively.
 
 	baud (default 2400)
 
@@ -209,26 +280,14 @@ optional, and their defaults follow:
 		one of 110, 150, 300, 600, 1200, 2400, 4800, 9600 or
 		19200.
 
-	parity (default none)
+	beep (default on)
 
-		The parity to use for transmission.  This can be one
-		of none, even or odd.
+		Enable or disable the terminal beep.  This can be either
+		on or off.
 
 	bits (default 8)
 
 		The number of data bits (7 or 8) to use for transmission.
-
-	stop (default 1)
-
-		The number of stop bits (1 or 2) to use for transmission.
-
-	init (default "ATZ^M~~~AT S7=45 S0=0 V1 X1^M~")
-
-		The modem initialisation string, delimited by double
-		quote characters.  "^" indicates the next character
-		should be interpreted as a control code, and "~"
-		indicates a 1/2 second pause.  The string cannot be
-		longer than 100 characters in length.
 
 	cinit (default yes)
 
@@ -239,24 +298,224 @@ optional, and their defaults follow:
 		initialisation string being sent to the UNIX host once
 		connected.
 
-	hangup (default "~~~+++~~~ATH0^M")
+	colhighlight (default is screen mode dependent)
 
-		The modem hangup string to use if after dropping the
-		DTR signal, the carrier is still present.  The string
+		This numeric option specifies the screen attribute to
+		use for the highlighted printing characters (e.g. bold).
+		Setting this to 0 will make UW/PC use the default attribute
+		which depends on the screen mode in use.
+
+	colhighstatus (default is screen mode dependent)
+
+		This numeric option specifies the screen attribute to
+		use for the highlighted printing characters on the status line.
+		Setting this to 0 will make UW/PC use the default attribute
+		which depends on the screen mode in use.
+
+	colinverse (default is screen mode dependent)
+
+		This numeric option specifies the screen attribute to
+		use for the inverse printing characters.  Setting this to
+		0 will make UW/PC use the default attribute which depends
+		on the screen mode in use.
+
+	colnormal (default is screen mode dependent)
+
+		This numeric option specifies the screen attribute to
+		use for the normal printing characters.  Setting this to
+		0 will make UW/PC use the default attribute which depends
+		on the screen mode in use.
+
+	colstatus (default is screen mode dependent)
+
+		This numeric option specifies the screen attribute to
+		use for the normal printing characters on the status line.
+		Setting this to 0 will make UW/PC use the default attribute
+		which depends on the screen mode in use.
+
+	dial (default "ATDT")
+
+		This string is sent to the modem when ALT-D is pressed,
+		as a shortcut for dialing.  You can modify this string to
+		contain a phone number if you wish.  e.g. "ATDP1234567^M"
+		will dial the number 1234567 using pulse dialing on a
+		Hayes compatible modem when ALT-D is pressed.  The string
 		cannot be longer than 100 characters in length.
+
+	disable (default no)
+
+		This option allows you to completely turn off the handling
+		of the special UW server codes that UW/PC processes.  This
+		allows you to use UW/PC as a completely stand-alone comms
+		program with no interference from the UW protocol.  This
+		option can be either yes or no.  Note that you cannot use
+		the multi-window mode of UW/PC if this is set to 'yes'.
 
 	emul (default adm31)
 
 		The default terminal emulation type to use for windows.
 		When a new window is created, it will use this emulation
-		type.  This can be either adm31 or vt52.
+		type.  This can be one of adm31, vt52, or ansi or a string
+		(e.g. "vt102"), signifying a currently loaded terminal
+		description that will be searched for to become the
+		default emulation.  The double quotes are optional.
+		When the terminal description is searched for, case is
+		ignored during compares.
 
 	emul0 (defaults to whatever emul is set to)
 
 		Set the terminal emulation type for protocol 0.  This is
 		to rectify some problems with UNIX termcap entries that
 		are missing the entry for ADM31 terminals, as discussed 
-		above under "USING UW/PC".  It can be either adm31 or vt52.
+		above under "USING UW/PC".  It can be one of adm31, vt52
+		or ansi or a string specifying a terminal type loaded
+		with the "terminal" configuration option.
+
+	F1 - F10 (default undefined)
+
+		These ten configuration variables allow you to define
+		the function keys to any strings you desire.  If you do
+		not define a function key, it will have its default setting
+		as defined by the terminal emulation in use.  The character
+		"^" is a control code prefix.  e.g. "^M" corresponds to
+		the CTRL-M character.  "~" indicates a 1/2 second pause and
+		"#" outputs the next character directly, so that "#^" is
+		the character "^" ("#~" and "##" are similar), EXCEPT when
+		the next character is alphabetic.  In that case, if the
+		character is "x", then ALT-x is taken as the next character.
+		In this way, you could define F10 to "#Xy" to always exit
+		UW/PC without needing to answer the Yes/No question.  Defining
+		a function key to an empty string will also cause the
+		default behaviour to be taken.  The strings cannot be
+		longer than 100 characters in length.
+
+	init (default "ATZ^M~~~AT S7=45 S0=0 V1 X1^M~")
+
+		The modem initialisation string, delimited by double
+		quote characters.  The strings are the same as for
+		function keys, except that ALT sequences are ignored.
+		The string cannot be longer than 100 characters in length.
+
+	hangup (default "~~~+++~~~ATH0^M")
+
+		The modem hangup string to use if after dropping the
+		DTR signal, the carrier is still present.  The string
+		cannot be longer than 100 characters in length.
+
+	parity (default none)
+
+		The parity to use for transmission.  This can be one
+		of none, even or odd.
+
+	popup (default is off)
+
+		This option specifies whether or not windows created by
+		the remote host should automatically popup to be the top-most
+		window when they are created, so that they can then be used
+		straight away without you needing to determine their window
+		numbers.  This option can be either on or off.
+
+	port (default 1)
+
+		The serial port to be used for communications.  This can
+		be one of 1,2,3 or 4.
+
+	sformat (default " ALT-Z for Help %v %e %v %p %v %u %v Windows: %a")
+
+		Set the format of the status line when it is enabled by
+		the "status" configuration option.  This string cannot
+		be longer than 100 characters in length.  The string
+		can contain "printf"-style commands to make various types
+		of information appear in the line.  When the status line
+		is displyed on the screen, it is truncated to the screen
+		width.  The commands are summarised below:
+
+			%% - The character "%" itself.
+			%a - Expands to all currently active window numbers
+			     separated by spaces.  This will always occupy
+			     14 characters, padded with spaces.
+			%e - Terminal type of the current window, padded
+			     to fill 5 characters with spaces.
+			%h - Turn highlighting on (alternate attribute).
+			%i - Turn highlighting off (normal attribute).
+			%n - Expands to the highest numbered window in use
+			     at present ('0' if in Protocol 0).
+			%o - Expands to "Online " or "Offline" depending on
+			     the current communications carrier status.
+			%p - The current serial communications parameters.
+			     e.g. "COM1 2400 N-8-1".
+			%s - Current system time in 24-hour format (HH:MM).
+			%t - Elapsed time since logon in hours and minutes,
+			     or 5 spaces if no carrier is present.
+			%u - In protocol 0, gives two spaces and in protocol
+			     1, gives the string "UW".
+			%v - Vertical box drawing line in the status line.
+			%w - Current window number ('0' if in protocol 0).
+			%0-%9 - These are used internally by UW/PC for
+			     showing block counts on file transfers, etc.
+			     If you use them in your status line, they will
+			     expand out to the string "0".
+
+	sposn (default left)
+
+		This option specifies where the status line specified by
+		the "sformat" option is to appear on the bottom line of
+		the screen.  This can be one of left, right, center, centre,
+		leftsquash, rightsquash, centersquash or centresquash.  The
+		values that specify squashing will make the line appear in
+		the given position using up only as many character positions
+		as necessary.  The rest of the line will be set to black
+		and white.  This is useful for very small status lines -
+		they can be squashed into a corner of the screen and ignored.
+
+	status (default on)
+
+		Enable or disable the status line on the bottom of the
+		screen.  This can be either on or off.
+
+	stop (default 1)
+
+		The number of stop bits (1 or 2) to use for transmission.
+
+	strip (default off)
+
+		Enable or disable the stripping of the most significant
+		bit of received characters.  This can be either on or off.
+		This is provided to strip unwanted parities on some systems.
+		If seven bit transmission is in use, this option will be
+		ignored and the most significant bit will always be stripped.
+
+	swapbs (default off)
+
+		Enable or disable the swapping of the backspace and delete
+		keys.  Some people like to have this swap in place.  This
+		can be either on or off.
+
+	terminal (no default)
+
+		This can appear up to five times in the configuration file
+		and each occurrence will load a terminal description into
+		memory.  It's string value specifies a filename for a
+		compiled terminal description.  The full pathname should be
+		supplied.  For example, the following line could be added to
+		the configuration file to add a "VT102" terminal emulation:
+
+			terminal="c:\uw\vt102.trm"
+
+		The standard VT52, ADM31 and ANSI terminal types can be
+		replaced with new terminal descriptions by loading new
+		files that have the VT52, ADM31 or ANSI terminal type
+		specified.
+
+	uw (default "uw^M")
+
+		This string is sent to the UNIX host in protocol 0 when
+		the ALT-U key is pressed.  Its purpose is to send the
+		name of the UW server program to the host to start the
+		server, and thus is a shortcut to typing the name in by
+		hand.  The characters "^" and "~" have the same meaning
+		as for the modem control strings.  The string cannot be
+		longer than 100 characters in length.
 
 	xonxoff (default encoded)
 
@@ -276,66 +535,31 @@ optional, and their defaults follow:
 		terminal server will receive the XON and XOFF characters,
 		giving better control over scrolling displays.
 
-	beep (default on)
+	zmodem (default "DSZ")
 
-		Enable or disable the terminal beep.  This can be either
-		on or off.
-
-	strip (default off)
-
-		Enable or disable the stripping of the most significant
-		bit of received characters.  This can be either on or off.
-		This is provided to strip unwanted parities on some systems.
-
-	swapbs (default off)
-
-		Enable or disable the swapping of the backspace and delete
-		keys.  Some people like to have this swap in place.  This
-		can be either on or off.
-
-	dial (default "ATDT")
-
-		This string is sent to the modem when ALT-D is pressed,
-		as a shortcut for dialing.  You can modify this string to
-		contain a phone number if you wish.  e.g. "ATDP1234567^M"
-		will dial the number 1234567 using pulse dialing on a
-		Hayes compatible modem when ALT-D is pressed.  The string
-		cannot be longer than 100 characters in length.
-
-	uw (default "uw^M")
-
-		This string is sent to the UNIX host in protocol 0 when
-		the ALT-U key is pressed.  Its purpose is to send the
-		name of the UW server program to the host to start the
-		server, and thus is a shortcut to typing the name in by
-		hand.  The characters "^" and "~" have the same meaning
-		as for the modem control strings.  The string cannot be
-		longer than 100 characters in length.
-
-	F1 - F10 (default undefined)
-
-		These ten configuration variables allow you to define
-		the function keys to any strings you desire.  If you do
-		not define a function key, it will have its default setting
-		as defined by the terminal emulation in use.  The characters
-		"^" and "~" have the same meaning as for the modem control
-		strings.  Defining a function key to an empty string will
-		also cause the default behaviour to be taken.  The strings
-		cannot be longer than 50 characters in length.
+		This configuration variable specifies the name of the
+		program to run to perform ZModem file transfers.  Normally
+		the full path is searched for "DSZ" but you can specify
+		a more fuller path in this variable (e.g. "c:\bin\dsz")
+		if you wish.  It is assumed that the program indicated
+		by this variable has the same command-line syntax as the
+		DSZ program from Omen Technology Inc.  Strange things
+		may occur if the command-line syntax is not identical.
+		This string may be up to 100 characters in length.
 
 On startup, UW/PC makes a choice of screen colours based on the current
 screen mode.  If the current mode is 0 (40x25 CGA mono), 2 (80x25 CGA mono)
 or 7 (80x25 MDA mono), a monochrome scheme will be chosen.  Otherwise,
-a colour scheme will be chosen.  Currently these colours cannot be
-modified, and the screen mode cannot be overridden by configuration.  The
-utility program SETMODE.COM is provided to help out.  It takes a
-one-character argument corresponding to the mode to set.  e.g. "SETMODE 3"
-or "SETMODE 2".  There must only be ONE space between the command-name
-and the one-character argument, since the command is very primitive, but
-effective.  An 80x25 screen mode will always be used regardless of the
-current screen size.
+a colour scheme will be chosen.  These colours are overridden by the settings
+of the "colXXXXX" configuration options in the configuration file.  The
+utility program SETMODE.COM is provided to help out with setting screen
+modes and the default colours.  It takes a one-character argument
+corresponding to the mode to set.  e.g. "SETMODE 3" or "SETMODE 2".
+There must only be ONE space between the command-name and the one-character
+argument, since the command is very primitive, but effective.  An 80x25
+screen mode will always be used regardless of the current screen size.
 
-6. LIMITATIONS
+8. LIMITATIONS
 
 UW/PC and the UW server have a number of limitations.  Primarily, if
 a large amount of output is appearing in one window, the UW server will
@@ -355,14 +579,15 @@ connections.  As a last resort, you can press ALT-E to return to protocol
 0, and if the UW server hasn't exited (because the exit command was
 corrupted), you can press (while in protocol 0, not protocol 1) "CTRL-A"
 followed by the "Delete" key (or the backspace key if the "swapbs"
-configuration option is to to "on"), which corresponds to the UW exit
+configuration option is set to "on"), which corresponds to the UW exit
 command, which should abort the UW server.
 
-7. FUTURE WORK
+9. FUTURE WORK
 
-In future, UW/PC will be extended with the following capabilities: ANSI
-terminal emulation, X/Y/Zmodem file transfers in any window (and also
-protocol 0), XON/XOFF flow control, configurability of screen colours
-and modes, and support for a subset of the UW protocol 2 features which
-gives more control over window management.  Comments and suggestions
-are very welcome.
+In future, UW/PC will be extended with the following capabilities: A
+mini-FTP protocol, cutting and pasting between windows, scroll-back
+buffers, Ymodem file transfers in any window (and also protocol 0),
+XON/XOFF flow control and support for a subset of the UW protocol 2
+features which gives more control over window management.  Comments
+and suggestions are very welcome.  A major project that is underway
+is a port to Windows 3.0.

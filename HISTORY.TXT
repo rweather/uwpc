@@ -5,7 +5,24 @@
 1.01	Bug fixes and clean up phase - Not released.
 1.02	ASCII file transfers added - First public release.
 1.03	Small bug fix in the DOS shell-out.
-1.04	Lots of small things done for the first SIMTEL20 release:
+1.04	Lots of small things done:
 	(a) Add a "strip high bit" configuration option.
 	(b) Fix a small communications bug with sign extension.
 	(c) Add a "swap bs/del" configuration option.
+1.05	More bug fixes and enhancements - First SIMTEL20 release.
+	(a) Added COM3/COM4 support.
+	(b) Suppress status line on a configuration option.
+	(c) Force high bit stripping to always be on in 7-bit comms.
+	(d) Replace serial comms routines with faster assembly.
+2.00	Total rewrite of UW/PC in C++ to give a better program format.
+	Many enhancements including abstract code for terminal descriptions
+	and a client structure for supporting terminal emulations, file
+	transfers, etc.  (beta-release)
+
+			History of TERMCC Versions
+			==========================
+
+1.00	Initial version with minimal assembly code instructions for
+	VT52 and ADM31.
+1.01	Additions to help support ANSI emulation and a clean-up of
+	the command-line syntax - released with UW/PC 2.00.

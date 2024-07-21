@@ -1,0 +1,7 @@
+*.ASM
+*.LIB
+*.MAP
+*.TRM
+LEXYY.C
+Y_TAB.C
+Y_TAB.H

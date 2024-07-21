@@ -1,0 +1,80 @@
+                Documentation for the UWFTP Protocol
+                ------------------------------------
+                                by Rhys Weatherley, 1991.
+
+1. INTRODUCTION
+
+This document describes the protocol used for transmission of files between
+the UW/PC communications program (version 2.00 and higher) and UNIX hosts.
+The main "brains" of the protocol is in the UW/PC client program, putting as
+little burden as possible on the UNIX-based UWFTP server, both in terms of
+program complexity and machine load.
+
+2. PROTOCOL STARTUP
+
+When the server is run by the user on the UNIX host, it will send the character
+sequence CTRL-A followed by '>' followed by 'F'.  This will instruct UW/PC
+to begin a UWFTP session in the window the UWFTP server is executed within (or
+Protocol 0 if the UW server is not running).  If the UWFTP server does not
+receive a reply from UW/PC within one second it will send the sequence again,
+and will continue to retry at one-second intervals.  It will stop trying
+either when it receives a CTRL-X character (cancel) or the letter captial 'A'.
+If the transfer is cancelled, the server will exit, otherwise it will send a
+message of the form:
+
+        "HHHHH  UWFTP server <host-name> started on <date>"
+
+The five 'H' characters are present to provide some redundancy for error
+correction purposes.  The message above is followed by a line-feed character,
+optionally preceded by a carriage return character.  All characters except
+for the initial 'H' characters and spaces are displayed by UW/PC as a welcome
+message for the server.  No interpretation is placed on them.  Unlike the
+Internet FTP program, UW/PC doesn't ask for the user's password because the
+UWFTP server can only be run once the user has logged in, and so asking for
+a password is redundant.
+
+If the UWFTP server receives a CTRL-X character at any time then it will send
+a number of line-feeds (and carriage returns) and then five 'X' characters
+separated and followed by some more line-feeds and carriage returns.  The
+server will then exit.
+
+3. PACKET FORMAT
+
+This section describes the packet format that is used to transmit information
+between UW/PC and the UWFTP server running on the UNIX host.  Packets are
+delimited by one or more line-feed or carriage return characters (or any
+combination).  Each packet begins with the packet number and type, the
+encoded packet length (excluding the header information) and a two-byte
+checksum value.  The maximum packet size is 94 characters, excluding the
+header information.  The character encoding used is similar to that used by
+the Kermit protocol, but is not fully compatibile with Kermit.  The following
+characters describe the packet types that can get send between the machines:
+
+        R - Specifies a filename to be retrieved from the UNIX host.
+            The host will send a 'B' type packet in response to the
+            correct reception of this packet type.
+        S - Specifies a filename to be opened to place data sent from
+            to the UW/PC client into.  After acknowledgement, the client
+            will send a 'B' type packet.
+        B - Beginning of file transfer.  The server or client has begun
+            a file transfer.  The next highest received packet number
+            from the client or server is the first 'D' type data packet
+            for the current transfer file.
+        D - Data packet.  All of the bytes following the packet header
+            are considered raw data to be placed in the output file.  All
+            transformation between ASCII and BINARY data is done by UW/PC.
+            Data packets will be re-sent at five-second intervals until
+            acknowledgements are received.
+        E - End of data packet.  This is sent by the server or client when
+            all data packets have been transferred.  The packet will be
+            re-sent at one-second intervals until an acknowledgement is
+            received.
+        K - Acknowledgement packet.  The data portion of the packet specifies
+            the packet number being acknowledged.  The packet will be re-sent
+            at one-second intervals until the next incoming packet is detected.
+        C - Specifies a UNIX command to be run on the host machine with an
+            empty standard input file and all standard output and standard
+            error output is to be transmitted back to the UW/PC client using
+            the data packets described above.  After acknowledgement, the
+            host will send a 'B' packet and will start sending the accumulated
+            output from the UNIX command.

@@ -25,6 +25,7 @@
    Version  DD/MM/YY  By  Description
    -------  --------  --  --------------------------------------
      1.0    15/12/90  RW  Original Version of UWPROTO.H
+     1.1    03/03/91  RW  Add protocol negotiation definitions.
 
 -------------------------------------------------------------------------*/
 
@@ -55,6 +56,9 @@
 
 #define P1_MF		0007	/* maintenance functions: */
 #define	P1_MF_ENTRY	0000	/*	start up */
+#define P1_MF_ASKPCL	0002	/*	request protocol negotiation */
+#define P1_MF_CANPCL	0003	/*	suggest protocol */
+#define P1_MF_SETPCL	0004	/*	set new protocol */
 #define	P1_MF_EXIT	0007	/*	exit */
 
 #endif	/* __UWPROTO_H__ */

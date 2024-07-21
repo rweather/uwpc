@@ -1,0 +1,177 @@
+			Instructions to Code Modifiers
+			------------------------------
+
+			Copyright 1991 Rhys Weatherley
+
+1. MODIFYING UW/PC.
+
+You may modify this code anyway you like (under the terms of the GNU license),
+but if you make a derivative version of UW/PC I'd appreciate it if you did
+not release it for full public distribution.  Giving copies away to you friends
+is fine, given the proviso that they don't distribute it around much further
+than that.  This way I can keep control of the core UW/PC distribution and
+we can avoid heaps of "hacked" copies from hitting the streets.
+
+So much for Hitlerism!  If you come up with any good ideas for enhancing UW/PC
+and manage to implement something (no matter how primitive or advanced), I'd
+like to hear about it so it may be included in further releases of UW/PC.  If
+you can make your code fairly self-contained (in a module of its own with
+few changes to the main core UW/PC code itself) then it'll be easier for me
+to integrate it with the program.  Place the GNU copyright message and your
+name at the top of the modules somewhere.  I may need to make minor changes to
+your code to make it fit in better, but you'll retain the copyright on your
+parts.  Try not to make it DOS specific if you can, because then it'll be
+easier to integrate in the upcoming Windows 3.0 version.
+
+If you feel that want to write your own UW/PC-like program from scratch (i.e.
+a complete replacement for UW/PC), then go right ahead!!  Some competition
+will do the whole UW project good.  Just be careful about making "derivative
+works" (using large slabs of someone else's code) - I don't care too much
+about this part of the copyright law, but it's there so watch yourself.  You
+may be interested in one of the enhancements I'll be undertaking for UW/PC
+by the end of 1991, which I'll now discuss.
+
+Currently in the UW/PC program, if you want to add a new feature then you
+need to recompile the code.  This will get very unwieldy sooner or later so
+I am proposing to write an external interface standard for UW/PC.  This will
+be a set of services for accessing the multi-window management properties of
+UW/PC from another program.  So that you can write a program to take advantage
+of the UW protocol facilities of UW/PC that will be run as an external client
+to UW/PC.  I hope to stablise the core UW/PC setup (both DOS and Windows 3.0
+versions) by the end of 1991 and then the primary method of expansion will
+be via "third party external clients".  I'm not yet sure what form the
+external interface will take yet, but suggestions are welcome.
+
+2. UW/PC SOURCE FILES.
+
+This section describes the source files of UW/PC to give you a brief overview
+of what each one does.  This will help you in locating the best place to make
+modifications.  The new program structure (since version 1.05) is a highly
+integrated set of C++ classes.  The major class is the "UWClient" which defines
+all of the services needed to process a type of operation.  There are clients
+for terminal emulators, dialog boxes, file transfers, etc.  The principle
+method of expanding UW/PC is through the introduction of new clients.
+
+	COMMS.C		Serial communications routines for manipulating
+			the PC's serial ports.
+	COMMTEST.C	A test version of COMMS.C that doesn't talk to
+			the serial ports - useful under 386 Enhanced Mode
+			of Windows 3.0 to do communications in the
+			background and test UW/PC at the same time (I'm a
+			VERY busy person!).
+	SYMBOLS.C	Symbol table manipulation routines for TERMCC.EXE.
+	TERMCC.C	Main module for TERMCC.EXE.
+	CLIENT.CPP	Primitive client class declarations.
+	DISPLAY.CPP	Handling for the display of characters within a
+			window.  Each display has a RAM buffer associated
+			with it for the window's contents.  There is some
+			Windows 3.0 specific code in this at the moment,
+			but it is nowhere near complete as yet.
+	SCREEN.CPP	Low-level hardware screen accessing routines for
+			the DOS version of UW/PC.
+	MAIN.CPP	Main module for the DOS version of UW/PC.
+	KEYS.CPP	Keyboard handling routines.  This module translates
+			function keys for those that are defined in the
+			configuration file.
+	UW.CPP		Central core of the UW protocol.  This module manages
+			all incoming characters and keypresses and sends them
+			to the required window clients.
+	CONFIG.CPP	Configuration handling - reads the configuration file
+			and initialises the "UWConfig" object that contains
+			all configuration information.
+	TERMINAL.CPP	Declarations for terminal emulations.  The processing
+			of capability files compiled by TERMCC is present in
+			this module.
+	TIMER.CPP	System timer routines to keep track of the current
+			time and to provide support for timeouts in file
+			transfer protocols.
+	DIALOG.CPP	Dialog box handling clients for the DOS version of
+			UW/PC.  Dialog boxes are special clients that only
+			interact with the user to get information to fire
+			up other clients such as file transfers.
+	FILES.CPP	Primitive file transfer protocols, including ASCII
+			upload, download and capture.
+	XMODEM.CPP	Implementation of the XMODEM and YMODEM file transfer
+			protocols.  Because of the "polling nature" of UW/PC's
+			client architecture, file transfers are quite
+			horrendous using finite state machines to control the
+			protocols - YUK!!  But it's the best I can do without
+			adding a mini multi-tasking operating system that would
+			impose too many overheads.
+	CLIENT.H	Declarations for the major client types.
+	DISPLAY.H	Declarations for the window display handling routines.
+	EXTERN.H	Declarations that are specific to either DOS or
+			Windows 3.0.  This file is not complete yet, since
+			the full Windows 3.0 port hasn't been done yet.
+	SCREEN.H	Declarations for the hardware screen handling routines.
+	COMMS.H		Declarations for the COMMS.C and COMMTEST.C modules.
+	UWPROTO.H	Constants, etc that are peculiar to the UW protocol.
+	UW.H		Declarations for the central UW protocol handling.
+	KEYS.H		Declarations for the routines in KEYS.CPP.
+	CONFIG.H	Defines the "UWConfiguration" class that defines every
+			type of thing that can be configured.
+	OPCODES.H	Opcodes for the abstract machine code produced by
+			TERMCC.EXE and processed by TERMINAL.CPP.
+	TIMER.H		Declarations for the timer handling routines.
+	FILES.H		Definitions of the file transfer classes.
+	DIALOG.H	Declarations of the various dialog box types.
+	SYMBOLS.H	Declarations for TERMCC's symbol table routines.
+	TERMCC.L	Lexical analysis declarations for TERMCC that must be
+			processed by FLEX.
+	TERMCC.Y	Syntactical analysis declarations for TERMCC that must
+			be processed by BISON.
+	VT52.CAP	Capability file for the VT52 terminal type.  Compile
+			this with the TERMCC.EXE program (see the makefile
+			for more information on compiling this file).
+	ADM31.CAP	Capability file for the ADM31 terminal type.
+	ANSI.CAP	Capability file for the ANSI terminal type.
+
+3. FUTURE ENHANCEMENTS.
+
+This section describes some of the upcoming future enhancements, their possible
+version release numbers and the approximate release dates.
+
+        1. A version for Microsoft Windows 3.0 - all singing, all dancing.
+           [Version 2.50].
+        2. Uploading and downloading protocols and possible external
+           protocol programs [more in Version 2.10].
+        3. VT100, VT102 terminal types.  [Version 2.10].
+        4. Poor Man's NNTP news reader - a news reader that talks NNTP
+           but doesn't need TCP/IP to operate, just a telnet connection
+           to the NNTP server [Version 2.60 or 3.10].
+        5. Automatic XON/XOFF flow control.  [Version 2.10].
+        6. Some way of providing external clients.  i.e. an interrupt
+           service that allows programs you write for the PC to communicate
+           through UW/PC's windows.  Both DOS and Windows clients are
+           possible, using either interrupts or DDE for communication.
+           [Version 3.00].
+        7. Scroll back buffer for windows.  [Version 2.10].
+        8. TEK4010 support (probably only in the Windows 3.0 version, but
+	   I may be able to hack something up in DOS) and support for
+	   "uwplot".  [Version 2.70].
+	9. A FTP-like interface with a server program running on the remote
+	   host to give a file transfer interface similar to FTP.  Some of
+	   the code for this already exists, but it's not complete yet.
+	   [Version 2.10].
+       10. Some protocol 2 support - especially for setting the terminal
+           type to be used within a window from the remote machine, and
+	   to give a small "split-screen" capability.  [Version 2.10].
+
+Release dates:
+
+	2.00	- May 1991.
+	2.10	- June 1991.
+	2.50	- July 1991.
+	2.60	- Sept 1991 (??).
+	2.70	- Sept 1991.
+	3.00	- Dec 1991/Jan 1992.
+	3.10	- Feb 1992 (??).
+
+Versions 2.60 and 3.10 will depend on whether I get enough time to write my
+NNTP news reader - I may bypass it until the full external client services
+are in place and then I will release it as a separate product that will be
+able to use UW/PC as well as being able to work stand-alone.
+
+Any other ideas for enhancements are very welcome, and voluteers for writing
+new clients are also welcome.  Just write to one of the addresses in the
+UW.DOC file (e-mail preferred).

@@ -1,0 +1,354 @@
+//-------------------------------------------------------------------------
+//
+// ANSI.CAP - Capability file for the ANSI terminal type.  This is sort
+//	      of a combination of ANSI and VT102.
+// 
+//  This file is part of UW/PC - a multi-window comms package for the PC.
+//  Copyright (C) 1990-1991  Rhys Weatherley
+//
+//  This program is free software; you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation; either version 1, or (at your option)
+//  any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program; if not, write to the Free Software
+//  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+//
+// Revision History:
+// ================
+//
+//  Version  DD/MM/YY  By  Description
+//  -------  --------  --  --------------------------------------
+//    1.0    25/05/91  RW  Original Version of ANSI.CAP
+//
+//-------------------------------------------------------------------------
+
+		name	"ANSI"		// Name of the terminal type.
+
+start:		reset	0		// Reset insert mode flag.
+		setattr	0		// Reset current attribute.
+loop:		getch			// Get next character from remote.
+loop2:		switch			// Determine top-level action.
+		  0x00,loop		// Ignore NUL characters
+		  '\r',crproc
+		  '\n',lfproc
+		  '\b',bsproc
+		  '\t',tabproc
+		  0x07,bellproc
+		  0x1B,escproc
+		endsw
+		test	0		// Test the insertion flag.
+		jne	insert
+		send			// Send the character direct.
+		jmp	loop
+insert:		inschar			// Insert the received character.
+		jmp	loop		// Back around for another character.
+crproc:		cr
+		jmp	loop
+lfproc:		lf
+		jmp	loop
+bsproc:		bs
+		jmp	loop
+tabproc:	tab
+		jmp	loop
+dotabs:		geta	1,1		// Get number of tabs to do.
+		cmp	0
+		je	loop
+		setc
+tabloop:	tab
+		dec
+		jne	tabloop
+		jmp	loop
+bellproc:	bell
+		jmp	loop
+ignorearg:	dec			// This is not nice to the
+		jmp	getnums		// abstract emulation machine!!
+escproc:	getch			// Get the escape character.
+		cmp	'['		// Check for ESC [ sequences
+		jne	singles
+		resarr			// Prepare to fill the argument array.
+getnums:	getarg			// Get a numeric argument.
+		cmp	';'		// Check if another is to follow.
+		je	getnums
+		cmp	'?'		// If '?' then ignore it (for now).
+		je	ignorearg
+		cmp	'>'
+		je	ignorearg	// Ignore '>'s as well.
+		cmp	0x1B		// If ESC then get another sequence.
+		je	escproc
+		switch			// Test escape action wanted.
+		  '@',doinschar
+		  'A',upline
+		  'B',dnline
+		  'C',right
+		  'D',left
+		  'E',crlf
+		  'F',upscroll
+		  'G',setcolumn
+		  'H',domove
+		  'I',dotabs
+		  'J',doclear
+		  'K',doclrln
+		  'L',doinsline
+		  'M',dodelline
+		  'P',dodelchar
+		  'Z',loop		// Backtab - ignored for now.
+		  'a',right
+		  'b',loop		// Repeat char - ignored for now.
+		  'd',setrow
+		  'e',dnline
+		  'f',domove
+		  'g',loop		// Clear tabs - don't worry.
+		  'h',chkins
+		  'l',chkins2
+		  'm',attrs
+		  'r',loop		// No scrolling margins yet.
+		  's',saveall
+		  'u',restall
+		endsw
+		jmp	loop		// Ignore the escape sequence.
+chkins:		geta	1,0
+		cmp	4		// Check to see if insert mode is req.
+		je	enterins
+		jmp	loop
+chkins2:	geta	1,0
+		cmp	4		// Check for normal mode request.
+		je	exitins
+		jmp	loop
+saveall:	savexy			// Save the terminal statistics.
+		saveattr
+		jmp	loop
+restall:	restxy			// Restore the terminal statistics.
+		restattr
+		jmp	loop	
+singles:	resarr			// Reset arg array for cursor moves.
+		switch			// Test single code after ESC.
+		  '7',saveall
+		  '8',restall
+		  'D',dnline
+		  'E',crlf
+		  'H',loop		// Set tab - ignored here.
+		  'M',upscroll
+		  'c',hardreset
+		  '#',dummy		// Ignore character size requests.
+		endsw
+		jmp	loop
+dummy:		getch
+		jmp	loop
+hardreset:	clear			// Reset terminal characteristics.
+		load	0
+		setx
+		sety
+		move
+		jmp	start
+right:		geta	1,1		// Get number of places to move right.
+		cmp	0
+		je	loop		// Ignore move if 0
+		setc			// Set argument counter
+rightloop:	getxy
+		getx
+		add	1
+		cmp	width
+		jae	docrlf
+		setx
+		move
+		dec
+		jne	rightloop
+		jmp	loop
+docrlf:		cr
+		lf
+		dec
+		jne	rightloop
+		jmp	loop
+left:		geta	1,1		// Get number of places to move left.
+		cmp	0
+		je	loop		// Ignore move if 0
+		setc			// Set argument counter
+leftloop:	getxy
+		getx
+		cmp	0
+		je	loop
+		sub	1
+		setx
+		move
+		dec
+		jne	leftloop
+		jmp	loop
+setcolumn:	geta	1,1		// Get first argument (def is 1)
+		sub	1
+		getxy
+		setx
+		move
+		jmp	loop
+setrow:		geta	1,1		// Get first argument (def is 1)
+		sub	1
+		getxy
+		sety
+		move
+		jmp	loop
+crlf:		geta	1,1		// Get number of CRLF's to do.
+		cmp	0
+		je	loop
+		setc
+crlfloop:	cr
+		lf
+		dec
+		jne	crlfloop
+		jmp	loop
+upline:		geta	1,1		// Get number of places to move up.
+		cmp	0
+		je	loop		// Ignore move if 0
+		setc			// Set argument counter
+uploop:		getxy
+		gety
+		cmp	0
+		je	loop
+		sub	1
+		sety
+		move
+		dec
+		jne	uploop
+		jmp	loop
+upscroll:	geta	1,1		// Get number of times to scroll up.
+		cmp	0
+		je	loop
+		setc
+upscloop:	getxy
+		gety
+		cmp	0
+		je	doscrollup
+		sub	1
+		sety
+		move
+		dec
+		jne	upscloop
+		jmp	loop
+doscrollup:	insline
+		jmp	loop
+dnline:		geta	1,1		// Get number of places to move down.
+		cmp	0
+		je	loop		// Ignore move if 0
+		setc			// Set argument counter
+dnloop:		lf
+		dec
+		jne	dnloop
+		jmp	loop
+doclear:	geta	1,0		// get clear code (def is 0)
+		switch
+		  0,clrend
+		  1,clrhome
+		  2,clrall
+		endsw
+clrend:		clreos
+		jmp	loop
+clrhome:	clrsos
+		jmp	loop
+clrall:		clear
+		jmp	loop
+doclrln:	geta	1,0		// get clear code (def is 0)
+		switch
+		  0,clrendln
+		  1,clrstart
+		  2,clrline
+		endsw
+clrendln:	clreol
+		jmp	loop
+clrline:	clreol
+clrstart:	clrsol
+		jmp	loop
+home:		load	0
+		setx
+		sety
+		move
+		jmp	loop
+domove:		geta	1,1
+		sub	1
+		sety
+		geta	2,1
+		sub	1
+		setx
+		move
+		jmp	loop
+doinsline:	geta	1,1		// Get number of lines to insert.
+		cmp	0
+		je	loop
+		setc
+insloop:	insline
+		dec
+		jne	insloop
+		jmp	loop
+doinschar:	geta	1,1		// Get number of chars to insert.
+		cmp	0
+		je	loop
+		setc
+insloop2:	insblank
+		dec
+		jne	insloop2
+		jmp	loop
+attrs:		setattr	0		// Go to the normal attribute first
+		dec
+		jb	loop		// No arguments - ignore rest.
+attrloop:	geta	1,0		// Get next attribute indicator
+		cmp	0		// Check for normal attr.
+		je	normattr
+		cmp	11		// Exit graphics mode on Heath-19.
+		je	normattr
+		cmp	1		// Check for the "bold" attribute.
+		je	bold
+		setattr	1		// Set inverse for everything else.
+		shift
+		dec
+		jae	attrloop
+		jmp	loop
+normattr:	shift
+		jmp	attrs
+bold:		setattr	2		// Set bold as the highlighted attr.
+		shift
+		dec
+		jae	attrloop
+		jmp	loop
+normal:		setattr	0
+		jmp	loop
+standout:	setattr 1
+		jmp	loop
+dodelline:	geta	1,1		// Get number of lines to delete.
+		cmp	0
+		je	loop
+		setc
+delloop:	delline
+		dec
+		jne	delloop
+		jmp	loop
+dodelchar:	delchar
+		jmp	loop
+dodelchar:	geta	1,1		// Get number of chars to delete.
+		cmp	0
+		je	loop
+		setc
+delloop2:	delchar
+		dec
+		jne	delloop2
+		jmp	loop
+enterins:	set	0			// Enter insert mode.
+		jmp	loop
+exitins:	reset	0			// Exit insert mode.
+		jmp	loop
+//
+// Define the keyboard translations to be performed.
+//
+keys:		key	0x4800,"\033[A"		// Cursor Up key
+		key	0x5000,"\033[B"		// Cursor Down key
+		key	0x4D00,"\033[C"		// Cursor Right key
+		key	0x4B00,"\033[D"		// Cursor Left key
+		key	0x4700,"\033[H"		// Cursor Home key
+		key	0x3B00,"\033OP"		// F1 (VT100)
+		key	0x3C00,"\033OQ"		// F2 (VT100)
+		key	0x3D00,"\033OR"		// F3 (VT100)
+		key	0x3E00,"\033OS"		// F4 (VT100)
+		endkeys

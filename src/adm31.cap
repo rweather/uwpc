@@ -1,0 +1,178 @@
+//-------------------------------------------------------------------------
+//
+// ADM31.CAP - Capability file for the ADM31 terminal type.
+// 
+//  This file is part of UW/PC - a multi-window comms package for the PC.
+//  Copyright (C) 1990-1991  Rhys Weatherley
+//
+//  This program is free software; you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation; either version 1, or (at your option)
+//  any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program; if not, write to the Free Software
+//  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+//
+// Revision History:
+// ================
+//
+//  Version  DD/MM/YY  By  Description
+//  -------  --------  --  --------------------------------------
+//    1.0    04/04/91  RW  Original Version of ADM31.CAP
+//    1.1    24/05/91  RW  Add some other "adm"-series codes.
+//
+//-------------------------------------------------------------------------
+
+		name	"ADM31"		// Name of the terminal type.
+
+start:		reset	0		// Reset insert mode flag.
+		setattr	0		// Reset current attribute.
+loop:		getch			// Get next character from remote.
+		switch			// Determine top-level action.
+		  0x00,loop		// Ignore NUL characters
+		  '\r',crproc
+		  '\n',lfproc
+		  '\b',bsproc
+		  '\t',tabproc
+		  0x07,bellproc
+		  0x0B,upline
+		  0x0C,right
+		  0x1A,clrscrn
+		  0x1B,escproc
+		  0x1E,home
+		endsw
+		test	0		// Test the insertion flag.
+		jne	insert
+		send			// Send the character direct.
+		jmp	loop
+insert:		inschar			// Insert the received character.
+		jmp	loop		// Back around for another character.
+
+crproc:		cr
+		jmp	loop
+lfproc:		lf
+		jmp	loop
+bsproc:		bs
+		jmp	loop
+tabproc:	tab
+		jmp	loop
+bellproc:	bell
+		jmp	loop
+escproc:	getch			// Get the escape character.
+		switch
+		  '*',clrscrn
+		  '=',domove
+		  'E',doinsline
+		  'G',attrs
+		  'R',dodelline
+		  'T',doclreol
+		  'Y',doclreos
+		  'W',dodelchar
+		  'q',enterins
+		  'r',exitins
+		  'u',start
+// The following escape codes are not guaranteed to be part of
+// the "ADM31" standard, but provide a good selection of facilities
+// from the whole "adm" range of terminals.  The terminals that do
+// support these according to termcap and terminfo are indicated.
+		  ')',standout		// adm3e, adm20, adm22, adm11
+		  '(',normal		// adm3e, adm20, adm22, adm11
+		  'Q',insertch		// adm2,22 insert char
+		  ';',clrscrn		// adm1, adm1a, adm2, adm42
+		  '3',dummy		// adm42 - cursor visibilites.
+		  'I',loop		// adm42,22 - backtab (ignored for now)
+		  'i',tabproc		// adm22
+		endsw
+		jmp	loop		// Ignore the escape sequence.
+dummy:		getch			// Skip the cursor visibility char.
+		jmp	loop
+insertch:	insblank		// Insert a blank here.
+		jmp	loop
+right:		getxy
+		getx
+		add	1
+		cmp	width
+		jae	crlf
+		setx
+		move
+		jmp	loop
+crlf:		cr
+		lf
+		jmp	loop
+upline:		getxy
+		gety
+		cmp	0
+		je	loop
+		sub	1
+		sety
+		move
+		jmp	loop
+clrscrn:	clear
+home:		load	0
+		setx
+		sety
+		move
+		jmp	loop
+domove:		getch
+		sub	' '
+		sety
+		getch
+		sub	' '
+		setx
+		move
+		jmp	loop
+doinsline:	insline
+		jmp	loop
+attrs:		getch			// Get attribute value.
+		switch
+		  '0',normal
+		  '1',standout
+// The following attribute values for for other terminals
+// in the "adm" series and provides a good range of facilities.
+		  '4',standout		// adm42, adm12, adm21
+		  '8',standout		// adm3e, adm21
+		endsw
+		jmp	loop
+normal:		setattr	0
+		jmp	loop
+standout:	setattr 1
+		jmp	loop
+dodelline:	delline
+		jmp	loop
+doclreol:	clreol
+		jmp	loop
+doclreos:	clreos
+		jmp	loop
+dodelchar:	delchar
+		jmp	loop
+enterins:	set	0			// Enter insert mode.
+		jmp	loop
+exitins:	reset	0			// Exit insert mode.
+		jmp	loop
+//
+// Define the keyboard translations to be performed.  Note that
+// the adm3e and adm22 terminal types use "\001@\r" ... for their
+// function key encodings.  The standard ADM31 codes are used.
+//
+keys:		key	0x4800,"\013"		// Cursor Up key
+		key	0x5000,"\012"		// Cursor Down key
+		key	0x4D00,"\014"		// Cursor Right key
+		key	0x4B00,"\010"		// Cursor Left key
+		key	0x4700,"\036"		// Home - adm3e, adm2
+		key	0x3B00,"\0011\r"	// F1
+		key	0x3C00,"\0012\r"	// F2
+		key	0x3D00,"\0013\r"	// F3
+		key	0x3E00,"\0014\r"	// F4
+		key	0x3F00,"\0015\r"	// F5
+		key	0x4000,"\0016\r"	// F6
+		key	0x4100,"\0017\r"	// F7
+		key	0x4200,"\0018\r"	// F8
+		key	0x4300,"\0019\r"	// F9
+		key	0x4400,"\0010\r"	// F0
+		endkeys

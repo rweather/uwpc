@@ -1,135 +1,152 @@
-/*-------------------------------------------------------------------------
-
-  UW.H - Declarations for the Unix Windows protocol handling routines.
-
-    This file is part of UW/PC - a multi-window comms package for the PC.
-    Copyright (C) 1990-1991  Rhys Weatherley
-
-    This program is free software; you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation; either version 1, or (at your option)
-    any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program; if not, write to the Free Software
-    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-
-  Revision History:
-  ================
-
-   Version  DD/MM/YY  By  Description
-   -------  --------  --  --------------------------------------
-     1.0    15/12/90  RW  Original Version of UW.H
-     1.1    01/01/91  RW  Clean up code and remove __PROTO__
-     1.2    26/01/91  RW  Add support for file transfers.
-
--------------------------------------------------------------------------*/
+//-------------------------------------------------------------------------
+//
+// UW.H - Declarations for the UW protocol within UW/PC.
+// 
+//  This file is part of UW/PC - a multi-window comms package for the PC.
+//  Copyright (C) 1990-1991  Rhys Weatherley
+//
+//  This program is free software; you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation; either version 1, or (at your option)
+//  any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program; if not, write to the Free Software
+//  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+//
+// Revision History:
+// ================
+//
+//  Version  DD/MM/YY  By  Description
+//  -------  --------  --  --------------------------------------
+//    1.0    23/03/91  RW  Original Version of UW.H
+//    1.1    05/05/91  RW  Cleanup phase.
+//    1.2    26/05/91  RW  Add command-line to "jumpdos".
+//
+//-------------------------------------------------------------------------
 
 #ifndef __UW_H__
 #define	__UW_H__
 
-#include "uwlib.h"		/* UW library declarations */
+//
+// Forward declarations of some classes needed by the UWProtocol class.
+//
+class	UWDisplay;
+class	UWClient;
 
-/* Force C calling conventions */
-#ifdef	__STDC__
-#define _Cdecl
-#else
-#define	_Cdecl	cdecl
-#endif
+//
+// Define the top-level interface to the UW protocol routines.
+// The static object "UWMaster" is the only object of this
+// type and once the program is initialised, it is in control
+// of all communication.
+//
+#define	NUM_UW_WINDOWS	8
 
-#ifdef	__cplusplus
-extern	"C" {
-#endif
+class	UWProtocol {
 
-/* Define the structure of a window process descriptor, */
-/* defining the process to be run within a window.	*/
-typedef	struct rec_UWProcess
-		{
-		  int used;		/* Non-zero if in use */
-		  int terminal;		/* Non-zero for terminal windows */
-		  struct rec_UWProcess *transfer; /* For file transfers */
+private:
 
-		  /* Initialise the window handling for the window */
-		  void	_Cdecl	(*init) (int window,uwtype_t emul);
+	int	CurrWindow;	// Current window that is in use.
+	int	LastInput;	// Last input window.
+	int	RoundWindow;	// Round-robin service window.
+	int	OutputWindow;	// Current output window.
+	int	gotmeta;	// Non-zero for meta escape.
+	int	gotiac;		// Non-zero for IAC escape.
+	int	getpcl;		// For protocol negotiation.
+	int	dirproc;	// Non-zero for direct processing.
 
-		  /* Output a character to the window */
-		  void	_Cdecl	(*output) (int window,int ch);
+	UWClient  *clients[NUM_UW_WINDOWS];
+	UWDisplay *displays[NUM_UW_WINDOWS];
+	int	numwinds;	// Number of windows in service - 1.
+	UWClient  *freelist;	// List of clients to be freed.
 
-		  /* Send a time slice tick to the window process */
-		  void	_Cdecl	(*tick) (int window);
+	friend	class	UWClient;
 
-		  /* Kill the window - no longer required */
-		  void	_Cdecl	(*kill) (int window);
+	// Send a UW command to the remote host.
+	void	command (int cmd);
 
-		  /* Make the window the top-most (current) window */
-		  void	_Cdecl	(*top) (int window);
+	// Send a character to the remote host in the
+	// round-robin service window.  This is called by
+	// the function UWClient::send.
+	void	send	(int ch);
 
-		  /* Translate keypresses according to the terminal type */
-		  /* Calls UWProcWindow to send keycodes as necessary.   */
-		  void	_Cdecl	(*key) (int window,int key);
+	// Send a character to the "remote" method of
+	// the client attached to the output window.
+	void	remote	(int ch);
 
-		} UWProcess;
+	// Process a character incoming from the host
+	void	fromhost (int ch);
 
-/* Define the list of all window process descriptors */
-#define	NUM_UW_WINDOWS		8	/* Window 0 is Protocol 0 terminal */
-extern	UWProcess _Cdecl UWProcList[];
+public:
 
-/* Define the currently displayed window number */
-extern	int	_Cdecl	UWCurrWindow;
+	int	terminate;	// Set this to non-zero to terminate program.
+	int	exitmulti;	// Set this to non-zero to exit UW session.
+	int	protocol;	// Number of the protocol that is in use.
 
-/* Define the UW protocol that is currently in use: 0-2 */
-extern	int	_Cdecl	UWProtocol;
+	// Start the processing of the UW protocol.  When
+	// this method exits, the program has been terminated.
+	// On startup, an initial dumb terminal is created.
+	// Returns NULL or an error message.
+	char	*start	(void);
 
-/* Initialise the UW protocol handling routines */
-void	_Cdecl	InitUWProtocol	(uwtype_t emul);
+	// Force the exit from Protocol 1 or higher, and a
+	// return to Protocol 0 (ignored in Protocol 0).
+	void	exit	(void);
 
-/* Terminate the UW protocol handling routines */
-void	_Cdecl	TermUWProtocol	(void);
+	// Create a new window (ignored in Protocol 0).  Returns
+	// the identifier, or 0 if no window could be created.
+	// If number != 0, then the number has been supplied
+	// explicitly, usually by the remote host.
+	int	create	(int number=0);
 
-/* Process a character typed in at the keyboard, sending */
-/* it to the host for the current window if necessary.   */
-void	_Cdecl	UWProcessChar	(int ch);
+	// Install a new client on top of the one in the current
+	// round-robin window.
+	void	install	(UWClient *newclient);
 
-/* Process a character for a particular window */
-void	_Cdecl	UWProcWindow	(int window,int ch);
+	// Remove the top-most client from the current round-
+	// robin window, and return to the client underneath.
+	void	remove	(void);
 
-/* Send a special key sequence through the current window */
-void	_Cdecl	UWSendKey	(int key);
+	// Display a new status line on the screen bottom
+	void	status	(void);
 
-/* Create a new terminal processing window - returns number or -1 */
-int	_Cdecl	UWTerminal	(uwtype_t emul);
+	// Turn direct character processing in protocol 0 on or off.
+	void	direct	(int on);
 
-/* Create a new window, with specified functions - returns number or -1 */
-int	_Cdecl	UWCreateWindow (void _Cdecl (*init) (int window,uwtype_t emul),
-			      void _Cdecl (*output) (int window,int ch),
-			      void _Cdecl (*tick) (int window),
-			      void _Cdecl (*kill) (int window),
-			      void _Cdecl (*top) (int window),
-			      void _Cdecl (*key) (int window,int key),
-			      int terminal,uwtype_t emul);
+	// Kill a particular window.  Once all Protocol 1 or 2
+	// windows have been destroyed, "exit" is automatically
+	// called to exit the protocol service.  If number == 0,
+	// then the current window is killed.
+	void	kill	(int number=0);
 
-/* Kill a numbered window if it is in use */
-void	_Cdecl	UWKillWindow	(int window);
+	// Bring a particular window to the top (i.e. make it
+	// the current window).
+	void	top	(int number);
 
-/* Select a new window to be made the "top" window */
-void	_Cdecl	UWTopWindow	(int window);
+	// Jump out to a DOS shell, and fix everything on return.
+	// Optionally execute a command in DOS.
+	void	jumpdos	(char *cmdline=0);
 
-/* Do some processing for the protocol handling, and */
-/* send "tick" messages to all active windows.	     */
-void	_Cdecl	UWTick		(void);
+	// Hangup the modem and return to Protocol 0.
+	void	hangup	(void);
 
-/* Send the "exit" sequence to the UW server and clean up */
-/* The "kill" message will be sent to all active windows  */
-/* first, to allow graceful exit of running processes.	  */
-void	_Cdecl	UWExit		(void);
+	// Send a modem control string through the current window.
+	// Modem control strings include initialisation, hangup, etc.
+	void	sendstring (char *str);
 
-#ifdef	__cplusplus
-}
-#endif
+	// Exit protocol 1 and send a modem line break.
+	void	sendbreak (void);
+
+};
+
+//
+// Define the master object for handling the UW protocol.
+//
+extern	UWProtocol	UWMaster;
 
 #endif	/* __UW_H__ */

@@ -27,22 +27,13 @@
      1.0    20/12/90  RW  Original Version of KEYS.H
      1.1    01/01/91  RW  Clean up and remove __PROTO__
      1.2    01/01/91  RW  Add trapping of INT 1B to disable CTRL-BREAK
+     1.3    23/03/91  RW  Convert to C++ for Version 2.00 of UW/PC.
+     1.4    05/05/91  RW  Process function key expansions.
 
 -------------------------------------------------------------------------*/
 
 #ifndef __KEYS_H__
 #define	__KEYS_H__
-
-/* Force C calling conventions */
-#ifdef	__STDC__
-#define _Cdecl
-#else
-#define	_Cdecl	cdecl
-#endif
-
-#ifdef	__cplusplus
-extern	"C" {
-#endif
 
 /* Define some special key codes that will be returned from GetKeyPress */
 #define ALT_WIND_NUM(n)		((0x77 + (n)) << 8)
@@ -71,23 +62,18 @@ extern	"C" {
 #define CURSOR_INS		0x5200
 #define CURSOR_DEL		0x7F	/* This module translates this key */
 #define DIAL_KEY		0x2000	/* ALT-D */
-
-/* Define the strings for the 10 function keys */
-#define	FUNC_STR_SIZE	50
-extern	char	FunctionKeys[10][FUNC_STR_SIZE + 1];
+#define UWFTP_KEY		0x2100	/* ALT-F */
+#define CAPTURE_KEY		0x2600	/* ALT-L */
+#define	PAUSE_KEY		-2	/* 1/2 second pause */
 
 /* Initialise the keyboard handling system */
-void	_Cdecl	InitKeyboard	(void);
+void	InitKeyboard	(void);
 
 /* Terminate the keyboard handling system */
-void	_Cdecl	TermKeyboard	(void);
+void	TermKeyboard	(void);
 
 /* Return the user's next keypress, or -1 if none available */
 /* Returns 0-255 for the ASCII values, or extended keycode. */
-int	_Cdecl	GetKeyPress	(void);
-
-#ifdef	__cplusplus
-}
-#endif
+int	GetKeyPress	(void);
 
 #endif	/* __KEYS_H__ */

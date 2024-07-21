@@ -1,0 +1,156 @@
+//-------------------------------------------------------------------------
+//
+// VT52.CAP - Capability file for the VT52 terminal type.
+// 
+//  This file is part of UW/PC - a multi-window comms package for the PC.
+//  Copyright (C) 1990-1991  Rhys Weatherley
+//
+//  This program is free software; you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation; either version 1, or (at your option)
+//  any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program; if not, write to the Free Software
+//  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+//
+// Revision History:
+// ================
+//
+//  Version  DD/MM/YY  By  Description
+//  -------  --------  --  --------------------------------------
+//    1.0    23/03/91  RW  Original Version of VT52.CAP
+//    1.1    24/05/91  RW  Add some other "vt5/6" series codes.
+//
+//-------------------------------------------------------------------------
+
+		name	"VT52"		// Name of the terminal type.
+
+start:		getch			// Get next character from remote.
+		switch			// Determine top-level action.
+		  0x00,start		// Ignore NUL characters
+		  '\r',crproc
+		  '\n',lfproc
+		  '\b',bsproc
+		  '\t',tabproc
+		  0x07,bellproc
+		  0x1B,escproc
+		endsw
+		send52			// Send the character direct.
+		jmp	start		// Back around for another character.
+
+crproc:		cr
+		jmp	start
+lfproc:		lf
+		jmp	start
+bsproc:		bs
+		jmp	start
+tabproc:	tab
+		jmp	start
+bellproc:	bell
+		jmp	start
+escproc:	getch			// Get the escape character.
+		switch			// Determine escape action.
+		  '7',savepos
+		  '8',restpos
+		  'A',upline
+		  'B',lfproc
+		  'C',rightch
+		  'D',bsproc
+		  'H',home
+		  'I',scrolldn
+		  'J',eraseos
+		  'K',eraseol
+		  'Y',movecurs
+// The following escape codes are not guaranteed to be part of
+// the "VT52" standard, but provide a good selection of facilities
+// from the whole "vt5/6" range of terminals.  The terminals that do
+// support these according to termcap and terminfo are indicated.
+		  'P',extras		// vt61 line extras
+		  'Q',eraseos		// mime2a (enhanced vt52 emulator)
+		  'L',clrscrn		// mime2a
+		  '4',standout		// mime2a
+		  '5',normal		// mime2a
+		  'E',insertln		// h1552 (hazeltine 1552)
+		  'O',deleteln		// h1552
+		  'S',standout		// h1552-rv (reverse video)
+		  'T',normal		// h1552-rv
+		endsw
+		jmp	start		// Ignore the escape code.
+//
+// The following code is for the escape actions on output sequences.
+//
+savepos:	savexy
+		jmp	start
+restpos:	restxy
+		jmp	start
+upline:		getxy			// Get current cursor position.
+		gety			// Need to change Y co-ordinate.
+		cmp	0
+		je	start		// Ignore if at screen top.
+		sub	1
+		sety			// Set a new Y co-ordinate.
+		move
+		jmp	start
+rightch:	getxy			// Get current cursor position.
+		getx			// Need to change X co-ordinate.
+		add	1
+		cmp	width		// Check if over right screen side.
+		jb	rightok
+		cr			// Need to return to the start
+		lf			// of the next screen line.
+		jmp	start
+rightok:	setx
+		move			// Move to the new position.
+		jmp	start
+clrscrn:	clear			// Clear the entire screen.
+home:		load	0		// Move to screen position (0,0).
+		setx
+		sety
+		move
+		jmp	start
+scrolldn:	scrldn			// Scroll screen down one line.
+		jmp	start
+eraseos:	clreos			// Clear to the screen's end.
+		jmp	start
+eraseol:	clreol			// Clear to the line's end.
+		jmp	start
+movecurs:	getch			// Get the Y co-ordinate.
+		sub	' '
+		sety
+		getch			// Get the X co-ordinate.
+		sub	' '
+		setx
+		move
+		jmp	start
+extras:		getch			// Get VT61 extra code for ESC-P.
+		switch
+		  'f',insertln		// vt61
+		  'd',deleteln		// vt61
+		endsw
+		jmp	start
+insertln:	insline
+		jmp	start
+deleteln:	delline
+		jmp	start
+normal:		setattr	0
+		jmp	start
+standout:	setattr	1
+		jmp	start
+//
+// Define the keyboard translations to be performed.
+//
+keys:		key	0x4800,"\033A"		// Cursor Up key
+		key	0x5000,"\033B"		// Cursor Down key
+		key	0x4D00,"\033C"		// Cursor Right key
+		key	0x4B00,"\033D"		// Cursor Left key
+		key	0x3B00,"\033P"		// F1
+		key	0x3C00,"\033Q"		// F2
+		key	0x3D00,"\033R"		// F3
+		key	0x3E00,"\033S"		// F4
+		endkeys
