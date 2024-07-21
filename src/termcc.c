@@ -47,7 +47,7 @@ char	*argv[];
   int posn;
 
   /* Print the program banner and copyright message */
-  printf ("TERMCC version 1.01, Copyright (C) 1991 Rhys Weatherley\n");
+  printf ("TERMCC version 1.02, Copyright (C) 1991 Rhys Weatherley\n");
   printf ("TERMCC comes with ABSOLUTELY NO WARRANTY; see the file COPYING for details.\n");
   printf ("This is free software, and you are welcome to redistribute it\n");
   printf ("under certain conditions; see the file COPYING for details.\n");

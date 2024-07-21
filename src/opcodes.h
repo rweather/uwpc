@@ -25,6 +25,8 @@
    Version  DD/MM/YY  By  Description
    -------  --------  --  --------------------------------------
      1.0    24/03/91  RW  Original Version of OPCODES.H
+     1.1    10/12/91  RW  Add support for secondary key tables
+     			  and some extra stuff for VT100.
 
 -------------------------------------------------------------------------*/
 
@@ -34,9 +36,10 @@
 /*
  * Define the version of the terminal descriptions that are supported
  * by the UW/PC program that uses them.  Only descriptions with versions
- * between 0x100 and this number will be accepted.
+ * between 0x100 and this number will be accepted.  This should roughly
+ * correspond to the current version of TERMCC.
  */
-#define	UW_TERM_VERSION		0x100
+#define	UW_TERM_VERSION		0x102
 
 /*
  * Define the size of the terminal description header.  This is the
@@ -46,7 +49,9 @@
 #define	TERM_HEADER_SIZE	6
 
 /*
- * Define the opcodes that can appear in a Termcap program.
+ * Define the opcodes that can appear in a Termcap program.  To
+ * ensure backwards compatibility of terminal descriptions, only
+ * add opcodes to the end of this list.
  */
 enum   TermcapOpcodes {
 	OP_SEND= 1,OP_SEND52,OP_CR,OP_LF,OP_BS,OP_BSWRAP,OP_MOVE,
@@ -61,7 +66,8 @@ enum   TermcapOpcodes {
 	OP_TAB,OP_BELL,OP_SAVEXY,OP_RESTXY,OP_GETXY,OP_GETX,OP_GETY,
 	OP_SCRLUP,OP_SCRLDN,OP_SET,OP_RESET,OP_TEST,OP_RESARR,OP_GETARG,
 	OP_GETA,OP_DEC,OP_SHIFT,OP_SETC,OP_SAVEATTR,OP_RESTATTR,
-	OP_INSBLANK,OP_CLIENT
+	OP_INSBLANK,OP_CLIENT,OP_KEYTAB,OP_KEYTAB_NONE,OP_TABND,
+	OP_REVLF
 };
 
 #endif	/* __OPCODES_H__ */

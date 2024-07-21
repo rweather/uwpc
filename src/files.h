@@ -82,9 +82,9 @@ public:
 	virtual	char far *name	() { if (kind == ASCII_CAPTURE)
 				       return ((char far *)" CAP");
 				      else if (kind == ASCII_UPLOAD)
-				       return ((char far *)"UP-LD");
+				       return ((char far *)"ASEND");
 				      else
-				       return ((char far *)"DN-LD");
+				       return ((char far *)"ARECV");
 				   };
 
 	virtual	void	key	(int keypress);
@@ -113,7 +113,11 @@ protected:
 	int	state;		// Current transfer state.
 	int	kind;		// Kind of transfer that is in effect.
 	int	receive;	// Non-zero for a receive.
+#ifdef	UWPC_DOS
 	int	timer;		// For keeping track of timers.
+#else	/* UWPC_DOS */
+	DWORD	timer;		// Under Windows 3.0, we use GetCurrentTime.
+#endif	/* UWPC_DOS */
 	int	timeout;	// Length of timeout (-1 if none).
 	int	bigblock;	// Non-zero for a 1K block receive.
 	char	buffer[1024];	// Buffer for the data.
@@ -145,6 +149,7 @@ public:
 	virtual	void	key	(int keypress);
 	virtual	void	remote	(int ch) { process (ch); };
 	virtual	void	tick	(void);
+	virtual	void	timertick (void);
 	virtual	char	*getstatus (void);
 	virtual	int	getstatarg (int digit);
 

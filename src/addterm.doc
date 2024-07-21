@@ -1,0 +1,33 @@
+Adding a new terminal type to the UW server code:
+
+h/uw_ipc.h:
+
+	Add another UWT constant.
+
+h/uw_win.h:
+
+	Add another WT constant and change WT_MAXTYPE.
+
+server/uw_tty.c:
+
+	Add the TERMCAP information to the envinfo structure if necessary.
+	Note: it may be necessary to add dummy structures fpr FTP, PRINT, etc.
+
+	Add another "type_emul" structure down near "adm31_emul" to indicate
+	the options to be used.
+
+server/uw_win.c:
+
+	Modify the "struct emulation" tables.
+
+lib/uw_netad.c:
+
+	Add another structure to the "optargs" array.
+
+lib/uw_ttype.c:
+
+	Add another descriptive name to the table.
+
+doc/uwtool.l:
+
+	Update the documentation to include the new terminal type.

@@ -143,7 +143,7 @@ extern	FILE	*DebugFile;
 // Process a character incoming from the host
 void	UWProtocol::fromhost (int ch)
 {
-  int arg,temp;
+  int arg,temp,windtype;
   if (DebugMode)
     fputc (ch,DebugFile);	// Save character in the debugging file.
   if (protocol > 0 || (UWConfig.StripHighBit && !dirproc))
@@ -172,6 +172,14 @@ void	UWProtocol::fromhost (int ch)
     }
   if (gotiac)
     {
+      int windtype;
+      if (newwind)
+        {
+	  // Get the window type character for a
+	  // window creation in Protocol 2.			
+	  windtype = ch;
+	  ch = P1_DIR_HTOC | P1_FN_NEWW;
+	} /* if */
       gotiac = 0;
       if ((ch & P1_DIR) != P1_DIR_HTOC)
         return;				// Skip command - wrong direction.
@@ -181,7 +189,25 @@ void	UWProtocol::fromhost (int ch)
 	  case P1_FN_NEWW:
 	  	if (protocol < 1 || arg < 1)
 		  break;
-	  	if (!(temp = create (arg))) // Attempt to create a window.
+		if (protocol > 1)
+		  {
+		    /* Process the window type char in Protocol 2 */
+		    if (!newwind && arg)
+		      {
+		        newwind = arg;
+			gotiac = 2;
+			break;
+		      } /* then */
+		     else
+		      {
+		        windtype = ch - ' ';
+			arg = newwind;
+			newwind = 0;
+		      } /* else */
+		  } /* then */
+		 else
+		  windtype = UWT_UNKNOWN;
+	  	if (!(temp = create (arg,windtype))) // Attempt to create.
 		  {
 		    // Send a kill command back to the remote host if
 		    // the window could not be created on this client.
@@ -418,6 +444,36 @@ void	UWProtocol::status (void)
 #endif	/* UWPC_DOS */
 } // UWProtocol::status //
 
+// Change the title bar on a client's window to reflect
+// the current mode.  This doesn't do anything under DOS.
+void	UWProtocol::titlebar (UWClient *client)
+{
+#ifdef	UWPC_WINDOWS
+#define	WIND_TEXT_LEN	64
+  HWND hWnd;
+  char title[WIND_TEXT_LEN],*name;
+  int posn;
+  hWnd = (client -> getwind ()) -> hWnd;
+  GetWindowText (hWnd,title,WIND_TEXT_LEN);
+  posn = 0;
+  while (title[posn] && title[posn] != '[')
+    ++posn;
+  while (posn > 0 && title[posn - 1] == ' ')
+    --posn;
+  if (client -> isaterminal)
+    title[posn] = '\0';
+   else
+    {
+      // Get the name of the client, skip spaces, and display it //
+      name = client -> name ();
+      while (*name == ' ')
+        ++name;
+      wsprintf (title + posn," [%s]",(LPSTR)name);
+    } /* if */
+  SetWindowText (hWnd,title);
+#endif	/* UWPC_WINDOWS */
+} // UWProtocol::titlebar //
+
 #define	SLICE_SIZE	5
 
 // Start the processing of the UW protocol.  When
@@ -432,6 +488,8 @@ char	*UWProtocol::start (void)
   MSG msg;
   extern HWND hMainWnd;
   extern HANDLE hAccTable;
+  int wincount=0;	// Counter for scheduling Yield requests.
+#define	WIN_MAXCOUNT	8
 #else
   int lasttime,lastonline;
 #endif	/* UWPC_WINDOWS */
@@ -445,6 +503,7 @@ char	*UWProtocol::start (void)
   gotmeta = 0;
   gotiac = 0;
   getpcl = 0;
+  newwind = 0;
   numwinds = 0;
   freelist = 0;
   dirproc = 0;
@@ -485,9 +544,12 @@ char	*UWProtocol::start (void)
   ShowMouse ();
 #endif	/* UWPC_DOS */
 
+#ifdef	UWPC_WINDOWS
   // Enable the communications port
-  comenable (UWConfig.ComPort);
+  comenable (UWConfig.ComPort,(UWConfig.ComFossil ? COMEN_FOSSIL : 0) |
+  			      (UWConfig.ComCtsRts ? COMEN_CTSRTS : 0));
   comparams (UWConfig.ComPort,UWConfig.ComParams);
+#endif	/* UWPC_WINDOWS */
 
   // Send the initialisation string to the modem.
 #ifdef	UWPC_DOS
@@ -595,19 +657,24 @@ char	*UWProtocol::start (void)
 	}
 
 #ifdef	UWPC_WINDOWS
-      // Let the other applications do some work //
-      Yield ();
-
-      // Process the Windows 3.0 messages that are waiting for processing //
-      if (!PeekMessage (&msg,NULL,NULL,NULL,PM_NOYIELD | PM_REMOVE))
-	continue;
-      if (msg.message == WM_QUIT)
-        break;		// The application has terminated.
-      if (!TranslateAccelerator (hMainWnd,hAccTable,&msg))
+      if (++wincount >= WIN_MAXCOUNT)
         {
-	  TranslateMessage (&msg);
-	  DispatchMessage (&msg);
-	}
+	  wincount = 0;
+
+          // Let the other applications do some work //
+          Yield ();
+
+          // Process the Windows 3.0 messages that are waiting for processing //
+          if (!PeekMessage (&msg,NULL,NULL,NULL,PM_NOYIELD | PM_REMOVE))
+	    continue;
+          if (msg.message == WM_QUIT)
+            break;		// The application has terminated.
+          if (!TranslateAccelerator (hMainWnd,hAccTable,&msg))
+            {
+	      TranslateMessage (&msg);
+	      DispatchMessage (&msg);
+	    }
+	} /* if */
 #endif	/* UWPC_WINDOWS */
     }
 
@@ -617,7 +684,9 @@ char	*UWProtocol::start (void)
   delete displays[0];		// Remove the protocol 0 window.
 #endif	/* UWPC_WINDOWS */
 
+#ifdef	UWPC_WINDOWS
   comdisable (UWConfig.ComPort,1);
+#endif	/* UWPC_WINDOWS */
   return (0);
 } // UWProtocol::start //
 
@@ -637,6 +706,27 @@ void	UWProtocol::sendkey (int wind,int key)
       exitmulti = 0;
     }
 } // UWProtocol::sendkey //
+
+// Process a timer pulse in the Windows 3.0 version of
+// the program.  The timer pulse is passed onto all
+// currently active clients.
+void	UWProtocol::timer (void)
+{
+  int window;
+  for (window = 0;window < NUM_UW_WINDOWS;++window)
+    {
+      RoundWindow = window;
+      if (clients[window])
+        clients[window] -> timertick ();
+    } /* for */
+} // UWProtocol::timer //
+
+// Send a mouse message to a particular window.  This
+// is only called in the Windows 3.0 version.
+void	UWProtocol::mouse (int wind,int x,int y,int buttons)
+{
+  clients[wind] -> mouse (x,y,buttons);
+} // UWProtocol::mouse //
 
 // Force the exit from Protocol 1 or higher, and a
 // return to Protocol 0 (ignored in Protocol 0).
@@ -675,7 +765,7 @@ void	UWProtocol::exit (void)
 // the identifier, or 0 if no window could be created.
 // If number != 0, then the number has been supplied
 // explicitly, usually by the remote host.
-int	UWProtocol::create (int number)
+int	UWProtocol::create (int number,int windtype)
 {
   int docreate=0;
   if (protocol < 1)
@@ -739,6 +829,7 @@ void	UWProtocol::install (UWClient *newclient)
   newclient -> setunder (clients[RoundWindow]);
   clients[RoundWindow] = newclient;
   status ();
+  titlebar (newclient);
 } // UWProtocol::install //
 
 // Remove the top-most client from the current round-
@@ -751,6 +842,7 @@ void	UWProtocol::remove (void)
   temp -> setunder (freelist);	// Save client on the free list.
   freelist = temp;
   status ();
+  titlebar (clients[RoundWindow]);
 } // UWProtocol::remove //
 
 // Turn direct character processing in protocol 0 on or off.
@@ -860,6 +952,11 @@ void	UWProtocol::hangup (void)
 // Modem control strings include initialisation, hangup, etc.
 void	UWProtocol::sendstring (char *str)
 {
+#ifdef	UWPC_WINDOWS
+  extern HCURSOR hHourGlass;
+  HCURSOR hCursor;
+  hCursor = SetCursor (hHourGlass);
+#endif
   while (*str)
     {
       if (*str == '~')
@@ -878,6 +975,9 @@ void	UWProtocol::sendstring (char *str)
         send (*str);			// Send the character direct
       ++str;
     }
+#ifdef	UWPC_WINDOWS
+  SetCursor (hCursor);
+#endif
 } // UWProtocol::sendstring //
 
 // Exit protocol 1 and send a modem line break.

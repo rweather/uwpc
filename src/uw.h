@@ -58,6 +58,7 @@ private:
 	int	gotmeta;	// Non-zero for meta escape.
 	int	gotiac;		// Non-zero for IAC escape.
 	int	getpcl;		// For protocol negotiation.
+	int	newwind;	// New window number for protocol 2.
 	int	dirproc;	// Non-zero for direct processing.
 
 	UWClient  *clients[NUM_UW_WINDOWS];
@@ -98,6 +99,15 @@ public:
 	// This is only called in the Windows 3.0 version.
 	void	sendkey	(int wind,int key);
 
+	// Process a timer pulse in the Windows 3.0 version of
+	// the program.  The timer pulse is passed onto all
+	// currently active clients.
+	void	timer	(void);
+
+	// Send a mouse message to a particular window.  This
+	// is only called in the Windows 3.0 version.
+	void	mouse	(int wind,int x,int y,int buttons);
+
 	// Force the exit from Protocol 1 or higher, and a
 	// return to Protocol 0 (ignored in Protocol 0).
 	void	exit	(void);
@@ -106,7 +116,7 @@ public:
 	// the identifier, or 0 if no window could be created.
 	// If number != 0, then the number has been supplied
 	// explicitly, usually by the remote host.
-	int	create	(int number=0);
+	int	create	(int number=0,int windtype=-1);
 
 	// Install a new client on top of the one in the current
 	// round-robin window.
@@ -118,6 +128,10 @@ public:
 
 	// Display a new status line on the screen bottom
 	void	status	(void);
+
+	// Change the title bar on a client's window to reflect
+	// the current mode.  This doesn't do anything under DOS.
+	void	titlebar (UWClient *client);
 
 	// Turn direct character processing in protocol 0 on or off.
 	void	direct	(int on);

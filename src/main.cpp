@@ -59,7 +59,7 @@
 // Define the title to be displayed for this module.
 //
 char	*TitleString = 
-	"UW/PC version 2.01, Copyright (C) 1990-1991 Rhys Weatherley\n"
+	"UW/PC version 2.02, Copyright (C) 1990-1991 Rhys Weatherley\n"
 	"UW/PC comes with ABSOLUTELY NO WARRANTY; see the file COPYING for details.\n"
 	"This is free software, and you are welcome to redistribute it\n"
 	"under certain conditions; see the file COPYING for details.\n\n"
@@ -81,6 +81,14 @@ int	main	(int argc,char *argv[])
         DebugMode = 1;
     } /* if */
   UWConfig.doconfig (argv[0]);	// Configure the program as necessary.
+
+  // Enable the communications port.  NOTE: this must be done here
+  // because FOSSIL drivers print out things to stdout when they
+  // are initialised, and muck up my nice clean UW startup screen :-) .
+  comenable (UWConfig.ComPort,(UWConfig.ComFossil ? COMEN_FOSSIL : 0) |
+  			      (UWConfig.ComCtsRts ? COMEN_CTSRTS : 0));
+  comparams (UWConfig.ComPort,UWConfig.ComParams);
+
   if (!HardwareScreen.init (0))
     {
       fprintf (stderr,"Cannot initialise screen - not enough memory\n");
@@ -102,6 +110,7 @@ int	main	(int argc,char *argv[])
   if (UWConfig.EnableMouse)
     TermMouse ();
   HardwareScreen.term ();
+  comdisable (UWConfig.ComPort,1);
   if (mesg)
     fprintf (stderr,"%s\n",mesg);
   if (DebugMode)

@@ -212,6 +212,11 @@ void	UWDisplay::setcurs (void)
 #ifdef	UWPC_DOS
   if (attop && !HardwareScreen.dialogenabled)
     HardwareScreen.cursor (x,y);
+#else
+#ifndef	NOT_CARET
+  if (careton)
+    SetCaretPos (x * UWFontWidth,y * UWFontHeight);
+#endif
 #endif
 } // UWDisplay::setcurs //
 
@@ -248,6 +253,7 @@ UWDisplay::UWDisplay (int number)
       // Create the Windows 3.0 window associated with this display object //
       title[8] = number + '0';
       curson = 0;
+      mousebuttons = 0;
       hWnd = CreateWindow ((number == 0 ? "UWPCMainClass" : "UWPCSessClass"),
       						// Name of window class.
       			   (number == 0 ? "Unix Windows" : title),
@@ -421,6 +427,24 @@ void	UWDisplay::lf	(void)
   CURSOR_ON ();
 } // UWDisplay::lf //
 
+// Perform a reverse line feed on the display.  When
+// the cursor is on the first display line, the display
+// will be scrolled one line down in the scrolling colour.
+void	UWDisplay::revlf (void)
+{
+  CURSOR_OFF ();
+  --y;
+  if (y < 0)
+    {
+      // Scroll the display down one line //
+      y = 0;
+      scroll (0,0,width - 1,height - 1,-1,scrollattr);
+    }
+  wrap52 = 0;
+  setcurs ();
+  CURSOR_ON ();
+} // UWDisplay::revlf //
+
 // Move back one position on the display.  If 'wrap'
 // is non-zero, wrap to previous lines as well.
 void	UWDisplay::bs	(int wrap)
@@ -443,11 +467,39 @@ void	UWDisplay::bs	(int wrap)
 } // UWDisplay::bs //
 
 // Tab across to the next tab stop of the supplied size.
-void	UWDisplay::tab (int vt52wrap,int tabsize)
+// If "nd" is non-zero then the tab is non-destructive.
+void	UWDisplay::tab (int vt52wrap,int tabsize,int nd)
 {
   do
     {
-      send (' ',vt52wrap);
+      if (!nd)
+        send (' ',vt52wrap);
+       else
+        {
+	  // Advance to the next screen position non-destructively //
+	  if (wrap52)
+	    {
+	      cr ();
+	      lf ();
+	    }
+	  CURSOR_OFF ();
+	  ++x;
+	  if (x >= width)
+	    {
+	      if (vt52wrap)
+	        {
+		  wrap52 = 1;
+		  --x;
+		}
+	       else
+		{
+		  cr ();
+		  lf ();
+		}
+	    }
+	  setcurs ();
+	  CURSOR_ON ();
+        } /* if */
     }
   while ((x % tabsize) != 0);
 } // UWDisplay::tab //
@@ -720,6 +772,8 @@ void	UWDisplay::markcut (int x1,int y1,int x2,int y2)
 	}
 #ifdef	UWPC_DOS
       HardwareScreen.line (x1,y,screen + start,length);
+#else
+      repaint (x1,y,x2,y);
 #endif
       offset += nextline;
       start += width;

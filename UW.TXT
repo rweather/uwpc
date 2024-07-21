@@ -1,4 +1,4 @@
-			    UW/PC Version 2.01
+			    UW/PC Version 2.02
 
 			     Rhys Weatherley
 
@@ -6,7 +6,7 @@
 
 1. INTRODUCTION
 
-This is version 2.01 of UW/PC, a multiple-window interface to UNIX for
+This is version 2.02 of UW/PC, a multiple-window interface to UNIX for
 IBM-PC's and compatible computers.  This program is based on a program
 written for the Macintosh by John Bruner.  It provides up to seven
 separate login sessions on the remote UNIX machine, and requires the
@@ -25,14 +25,21 @@ program binaries is included in this release.  For those of you who have
 previously compiled the server, there has been no change at all to the
 server code.
 
-Version 2.01 of UW/PC is a total rewrite of the previous public release
-(1.05) in C++ to give a better program structure for the upcoming enhancements
-to UW/PC.  Comments are invited to the author.  This version implements the
-Unix Windows protocols 0 and 1.  Protocol 2 (with more control over window
-management) is going to be supported in an upcoming Windows 3.0 version,
-however some small parts of Protocol 2 are present in this version which make
-Protocol 1 start faster.  Protocol 2 is not fully supported in the DOS
-versions because of the complexity of the windowing code that is necessary.
+Version 2.02 of UW/PC is the same as the previous public release (2.01)
+but with support for Windows 3.0 (finally!) and support for international
+language translation tables.  Comments are invited to the author.  This
+version implements the Unix Windows protocols 0 and 1.  Protocol 2 (with
+more control over window management) is going to be supported in an upcoming
+version, however some small parts of Protocol 2 are present in this version
+which make Protocol 1 start faster.  Protocol 2 will not fully supported in
+the DOS versions because of the complexity of the windowing code that is
+necessary.
+
+This version of UW/PC introduces support for FOSSIL drivers to improve
+communications performance on high speed modems.  See the "fossil" and
+"ctsrts" options in the "CONFIGURING UW/PC" section below for more details.
+The FOSSIL driver must be installed before running UW/PC.  FOSSIL drivers
+are available from many FTP sites and BBSes.
 
 There are now many more configuration options, so even if you have used UW/PC
 before, I suggest that you read the section "CONFIGURING UW/PC" later in this
@@ -54,6 +61,10 @@ under the GNU General Public License, but probably will.
 Comments about UW/PC can be sent to the author (me) at the e-mail
 address rhys.weatherley@gmail.com.
 
+Russ Poffenberger wrote another Windows 3.0 version of UW, called UW/WIN.
+Note that I do not have anything to do with UW/WIN, so all bug reports or
+suggestions about it should be sent to Russ.
+
 2. FILES
 
 The following files should be present in the UW/PC distribution:
@@ -63,6 +74,9 @@ The following files should be present in the UW/PC distribution:
 	UW.DOC		This documentation file.
 	UWEG.CFG	An example configuration file - rename to
 			UW.CFG to use this file.
+	UW.LNG		Translation tables for international language
+			support.  See INTERNATIONAL SUPPORT IN UW/PC
+			below for more details.
 	TERMCC.EXE	A compiler for creating new terminal types.
 	TERMCC.DOC	Documentation for TERMCC.EXE.
 	SETMODE.COM	A useful screen mode setting utility.
@@ -108,7 +122,9 @@ special keystrokes are defined in protocol 0:
 		window.  Press down and hold the left mouse button at
 		one corner of the region and release it at the other
 		corner.  This will only work if the mouse is enabled.
-		See "CONFIGURING UW/PC" below.
+		See "CONFIGURING UW/PC" below.  CTRL-INSERT will also
+		perform this operation, and under Windows 3.0 ALT-C
+		does NOT (it is used for a pull-down menu).
 	ALT-D - Send the string defined by the "dial" configuration
 		variable to the modem.  See "CONFIGURING UW/PC" below.
 	ALT-H - Hangup the modem, by first dropping the DTR signal,
@@ -129,7 +145,8 @@ special keystrokes are defined in protocol 0:
 		is sent to the remote host a 10ms pause will be made
 		to allow the remote host to catch up.  You can also press
 		the right mouse button to start a paste if the mouse
-		is enabled.
+		is enabled.  Under Windows 3.0, SHIFT-INSERT will also
+		perform this operation.
 	ALT-R - Receive a file from the remote host.  See UPLOADS AND
 		DOWNLOADS below.
 	ALT-S - Send the contents of a file to the remote host.  See
@@ -412,6 +429,13 @@ optional, and their defaults follow:
 		Setting this to 0 will make UW/PC use the default attribute
 		which depends on the screen mode in use.
 
+	ctsrts (default is off)
+
+		If a FOSSIL driver is enabled (see the "fossil" option below),
+		and this option is set to "on", then CTS/RTS handshaking will
+		be used.  This option has no effect if a FOSSIL driver is
+		not being used.
+
 	cursor (default is underline)
 
 		This option specifies the shape of the cursor to be used on
@@ -476,14 +500,36 @@ optional, and their defaults follow:
 		default behaviour to be taken.  The strings cannot be
 		longer than 100 characters in length.
 
-	font (default "System")
+	font (default "Terminal")
 
 		Set the font facename to be used in the Windows 3.0 version
 		of UW/PC.  This can be up to 15 characters in length.
 
-	fontsize (default 8)
+	fontset (default is oem)
+
+		Set the character set to be used in the Windows 3.0 version
+		of UW/PC.  It can be one of ansi, oem, or symbol.
+
+	fontsize (default 12)
 
 		Set the size of the font to be used in the Windows 3.0 version.
+		For a good small font for UW/PC, set "font" to "Terminal",
+		"fontset" to oem, and "fontsize" to 8.  This will allow you
+		to have more windows open on the screen at once.
+
+	fossil (default is no)
+
+		If this option is set to "yes", and there is a FOSSIL driver
+		installed, then it will be used for communications in
+		preference to direct communications I/O.  If a FOSSIL driver
+		is not installed, then direct communications I/O will be
+		used regardless of this option's setting.  On high speed
+		modems, FOSSIL drivers can give much better performance.  The
+		"ctsrts" option only applies if a FOSSIL driver is being used.
+		Note that when a FOSSIL driver is in use, only baud rates
+		between 300 and 38400 inclusive may be used.  Baud rates
+		outside this range are either increased to 300 baud, or
+		decreased to 38400 baud.
 
 	init (default "ATZ^M~~~AT S7=45 S0=0 V1 X1^M~")
 
@@ -497,6 +543,23 @@ optional, and their defaults follow:
 		The modem hangup string to use if after dropping the
 		DTR signal, the carrier is still present.  The string
 		cannot be longer than 100 characters in length.
+
+	langfile (default is "UW.LNG" in the same directory as "UW.EXE")
+
+		Specifies the name of the file to be searched to find
+		language character translation tables.  The full pathname
+		should be specified.  See INTERNATIONAL SUPPORT IN UW/PC.
+
+	language (default is none)
+
+		Set the language to be used for translation tables.  The
+		filename given by the "langfile" configuration option is
+		searched to find the given language and the internal tranlation
+		tables are loaded.  If the specified table could not be found
+		or this option is set to an empty string, then no character
+		translation is performed.  When using a non-English language,
+		it may sometimes be necessary to set the configuration
+		option "strip" to "off".
 
 	mouse (default on)
 
@@ -669,7 +732,53 @@ There must only be ONE space between the command-name and the one-character
 argument, since the command is very primitive, but effective.  An 80x25
 screen mode will always be used regardless of the current screen size.
 
-8. LIMITATIONS
+8. INTERNATIONAL SUPPORT IN UW/PC.
+
+UW/PC has support for international languages through its translation table
+mechanism.  If your language has a standard method to translate special
+non-English characters to 7-bit ASCII and back again, then you should consider
+setting up a translation table for it, and installing it with the "langfile"
+and "language" configuration options discussed above.  Currently UW/PC has
+support for Scandinavian languages via the standard language file "UW.LNG".
+If you develop a translation table for another language, then please send
+it to me via e-mail so I can include it in future releases of UW/PC.
+
+The language file consists of zero or more translation tables.  Blank lines
+and lines that start with '#' are treated as comments.  Each translation table
+in the language file starts with a comma-separated list of language names
+that may be used to reference the table.  This first line must not begin with
+white space to distinguish it from the lines in the rest of the table.
+
+All other lines in a translation table must start with at least one white
+space character (a space or a TAB) and be followed by a string of the form
+"value1 c value2" where "value1" is the original character code to be
+translated from, "value2" is the character code to translate to, and "c"
+is one of "=", ">" or "<".  White space may optionally surround "c".  If
+"c" is ">" then when the character "value1" is typed on the keyboard, it is
+translated into the character "value2".  If "c" is "<" then when the character
+"value2" is received from the remote host, then the character "value1" is
+printed on the screen.  If "c" is "=" then the translation is bidirectional.
+"value1" and "value2" can be decimal values or single characters enclosed
+in matching single or double quotes.  For example:
+
+		thargoidian,tharg
+			148 = '|'
+			132 > '{'
+			153 < '\'
+
+This table will translate character 148 to '|' when transmitting to the
+remote host, translate '|' to 148 when received from the remote host, translate
+132 to '{' on transmission and translate '\' to 153 on reception.  The table
+will be used when the "language" configuration option is set to "thargoidian".
+If there is more than one table in the file with the same language name then
+the resulting translation tables that are generated are the merging of all
+translation tables for the given language.
+
+Many thanks to Riku Mattila (sir@otitsun.oulu.fi) for explaining translation
+tables to me, and for prototyping Scandinavian support in a previous version
+of UW/PC.
+
+9. LIMITATIONS
 
 UW/PC and the UW server have a number of limitations.  Primarily, if
 a large amount of output is appearing in one window, the UW server will
@@ -692,7 +801,7 @@ followed by the "Delete" key (or the backspace key if the "swapbs"
 configuration option is set to "on"), which corresponds to the UW exit
 command, which should abort the UW server.
 
-9. FUTURE WORK
+10. FUTURE WORK
 
 In future, UW/PC will be extended with the following capabilities: A
 mini-FTP protocol, scroll-back buffers, Ymodem file transfers in any

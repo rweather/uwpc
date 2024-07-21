@@ -58,7 +58,7 @@ I have cleaned up the code and checked in the source code for all
 MS-DOS versions.  Branches in the repository called "uwpc-x.xx" are
 provided for each major release I was able to recover from my archives.
 
-I am currently missing the source code for versions 1.00, 1.05, and 2.02,
+I am currently missing the source code for versions 1.00 and 1.05,
 but everything else is available.  The final version 2.03 included a
 Windows 3.0 port but it is in an unfinished state.  I haven't checked
 2.03 in yet.

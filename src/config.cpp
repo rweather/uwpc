@@ -26,6 +26,7 @@
 //  -------  --------  --  --------------------------------------
 //    1.0    23/03/91  RW  Original Version of CONFIG.CPP
 //    1.1    30/10/91  RW  Modify to make it work with Windows 3.0
+//    1.2    08/12/91  RW  Add international language support.
 //
 //-------------------------------------------------------------------------
 
@@ -44,6 +45,16 @@
 #include <stdlib.h>		// "exit" was defined here.
 #include <alloc.h>		// Memory allocation routines.
 #include <errno.h>		// Error message declarations.
+
+//
+// Declare the Windows 3.0 character types since
+// we need them in DOS and we aren't including
+// the GDI stuff because of space limitations.
+// We shouldn't do this, but it's the best we can do.
+//
+#define	ANSI_CHARSET		0
+#define	SYMBOL_CHARSET		2
+#define	OEM_CHARSET		255
 
 //
 // Define the main UW/PC configuration object.
@@ -92,6 +103,8 @@ UWConfiguration::UWConfiguration (void)
   int key;
   ComPort = 1;
   ComParams = BAUD_2400 | BITS_8 | PARITY_NONE | STOP_1;
+  ComCtsRts = 0;
+  ComFossil = 0;
   StripHighBit = 0;
   DisableStatusLine = 0;
   P0TermType = 0;
@@ -120,8 +133,15 @@ UWConfiguration::UWConfiguration (void)
   MailBoxName[0] = '\0';		// Use the default system mailbox.
   Password[0] = '\0';			// No password to start with.
   CursorSize = CURS_UNDERLINE;
-  strcpy (FontFace,"System");		// Font information for Windows 3.0.
-  FontHeight = 8;
+  strcpy (FontFace,"Terminal");		// Font information for Windows 3.0.
+  FontHeight = 12;
+  FontCharSet = OEM_CHARSET;
+  for (key = 0;key < MAX_CHARS;++key)
+    {
+      KeyTransTable[key] = key;		// Do straight-through translation.
+      PrintTransTable[key] = key;
+    } /* for */
+  TransFile[0] = '\0';			// No translation table file yet.
 } // UWConfigration::UWConfiguration //
 
 // Abort the configuration with an error.
@@ -137,6 +157,130 @@ void	UWConfiguration::illegal (char *msg)
   SPRINTF (ErrorBuffer,"Configuration line %d: Illegal %s",linenum,(STRING)msg);
   ConfigError (ErrorBuffer);
 } // UWConfiguration::illegal //
+
+// Load a particular language into memory.
+void	UWConfiguration::loadlang (char *language)
+{
+  FILE *file;
+  static char langbuf[BUFSIZ];
+  int posn,flag,orig,newval,ch,len;
+
+  // Clear the translation tables to the default assignments //
+  for (posn = 0;posn < MAX_CHARS;++posn)
+    {
+      KeyTransTable[posn] = posn;
+      PrintTransTable[posn] = posn;
+    } /* for */
+  if (language[0] == '\0')
+    return;		// No language specified: stay with defaults.
+
+  // Open the file and set the language specified //
+  if ((file = fopen (TransFile,"r")) == NULL)
+    error ("Could not open translation table file");
+  setvbuf (file,NULL,_IOFBF,BUFSIZ);
+  flag = 0;
+  len = strlen (language);
+  while (fgets (langbuf,BUFSIZ,file))
+    {
+      // Process a line from the translation table file //
+      posn = 0;
+      while (langbuf[posn] && isspace (langbuf[posn]))
+        ++posn;
+      if (!langbuf[posn] || langbuf[posn] == '#')
+        continue;		// Skip comment lines.
+
+      // Distinguish between language names and translation specifications //
+      if (posn && flag)
+        {
+	  // Parse the original character code //
+	  if (isdigit (langbuf[posn]))
+	    {
+	      orig = 0;
+	      while (langbuf[posn] && isdigit (langbuf[posn]))
+	        orig = orig * 10 + (langbuf[posn++] - '0');
+	    } /* then */
+	   else if (langbuf[posn] == '\'' && langbuf[posn + 1] &&
+	   	    langbuf[posn + 2] == '\'')
+	    {
+	      orig = langbuf[posn + 1];
+	      posn += 3;
+	    } /* then */
+	   else if (langbuf[posn] == '"' && langbuf[posn + 1] &&
+	   	    langbuf[posn + 2] == '"')
+	    {
+	      orig = langbuf[posn + 1];
+	      posn += 3;
+	    } /* then */
+	   else
+	    continue;		// Ignore the error line.
+
+	  // Skip spaces and get the translation direction character //
+	  while (langbuf[posn] && isspace (langbuf[posn]))
+	    ++posn;
+	  if (!(ch = langbuf[posn]) ||
+	      (ch != '=' && ch != '>' && ch != '<'))
+	    continue;
+	  ++posn;
+	  while (langbuf[posn] && isspace (langbuf[posn]))
+	    ++posn;
+
+	  // Parse the translation character code //
+	  if (isdigit (langbuf[posn]))
+	    {
+	      newval = 0;
+	      while (langbuf[posn] && isdigit (langbuf[posn]))
+	        newval = newval * 10 + (langbuf[posn++] - '0');
+	    } /* then */
+	   else if (langbuf[posn] == '\'' && langbuf[posn + 1] &&
+	   	    langbuf[posn + 2] == '\'')
+	    {
+	      newval = langbuf[posn + 1];
+	      posn += 3;
+	    } /* then */
+	   else if (langbuf[posn] == '"' && langbuf[posn + 1] &&
+	   	    langbuf[posn + 2] == '"')
+	    {
+	      newval = langbuf[posn + 1];
+	      posn += 3;
+	    } /* then */
+	   else
+	    continue;		// Ignore the error line.
+
+	  // Set the required translation //
+	  orig &= 255;
+	  newval &= 255;
+	  switch (ch)
+	    {
+	      case '=':	KeyTransTable[orig] = newval; // fall through //
+	      case '<': PrintTransTable[newval] = orig; break;
+	      case '>': KeyTransTable[orig] = newval; break;
+	    } /* switch */
+	} /* then */
+       else if (!posn)
+        {
+	  // Test if we have found a relevant language table //
+	  flag = 0;
+	  while (langbuf[posn])
+	    {
+	      if (!strncmpi (langbuf + posn,language,len) &&
+	          (isspace (langbuf[posn + len]) ||
+		   !langbuf[posn + len] ||
+		   langbuf[posn + len] == ','))
+		{
+		  flag = 1;		// Found the language.
+		  break;
+		} /* if */
+	      while (langbuf[posn] && !isspace (langbuf[posn]) &&
+	      	     langbuf[posn] != ',')
+		++posn;
+	      while (langbuf[posn] && (isspace (langbuf[posn]) ||
+	      	     langbuf[posn] == ','))
+		++posn;
+	    } /* while */
+	} /* then */
+    } /* while */
+  fclose (file);
+} // UWConfiguration::loadlang //
 
 // Load a new terminal type from the specified filename.
 void	*UWConfiguration::LoadTerminal (char *filename)
@@ -368,6 +512,25 @@ void	UWConfiguration::processline (char *line)
         illegal ("font height - must be between 1 and 50");
       FontHeight = number;
     }
+   else if (!stricmp (ConfigName,"fontset") && type == TYPE_IDENT)
+    {
+      if (!stricmp (ConfigParam,"ansi"))
+        FontCharSet = ANSI_CHARSET;
+       else if (!stricmp (ConfigParam,"oem"))
+        FontCharSet = OEM_CHARSET;
+       else if (!stricmp (ConfigParam,"symbol"))
+        FontCharSet = SYMBOL_CHARSET;
+       else
+        illegal ("font character set");
+    }
+   else if (!stricmp (ConfigName,"langfile") && type == TYPE_STRING)
+    {
+      strcpy (TransFile,ConfigParam);
+    }
+   else if (!stricmp (ConfigName,"language") && type == TYPE_STRING)
+    {
+      loadlang (ConfigParam);
+    }
    else if (!stricmp (ConfigName,"init") && type == TYPE_STRING)
     {
       strcpy (InitString,ConfigParam);
@@ -378,6 +541,24 @@ void	UWConfiguration::processline (char *line)
         CarrierInit = 1;
        else if (!stricmp (ConfigParam,"no"))
         CarrierInit = 0;
+       else
+        illegal ("value: must be 'yes' or 'no'");
+    }
+   else if (!stricmp (ConfigName,"ctsrts") && type == TYPE_IDENT)
+    {
+      if (!stricmp (ConfigParam,"yes"))
+        ComCtsRts = 1;
+       else if (!stricmp (ConfigParam,"no"))
+        ComCtsRts = 0;
+       else
+        illegal ("value: must be 'yes' or 'no'");
+    }
+   else if (!stricmp (ConfigName,"fossil") && type == TYPE_IDENT)
+    {
+      if (!stricmp (ConfigParam,"yes"))
+        ComFossil = 1;
+       else if (!stricmp (ConfigParam,"no"))
+        ComFossil = 0;
        else
         illegal ("value: must be 'yes' or 'no'");
     }
@@ -569,6 +750,7 @@ int	UWConfiguration::doconfig (char *argv0)
   static char ConfigBuffer[BUFSIZ];
   char *FileName = "UW.CFG";
   FILE *file=NULL;
+  int len;
 
 #ifdef	UWPC_WINDOWS
   // Catch any errors that occur during Windows 3.0 configuration.
@@ -580,11 +762,18 @@ int	UWConfiguration::doconfig (char *argv0)
     } /* if */
 #endif
 
+  // Set the default translation filename.
+  strcpy (TransFile,argv0);
+  len = strlen (TransFile);
+  while (len > 0 && TransFile[len - 1] != '\\' &&
+         TransFile[len - 1] != '/')
+    --len;
+  strcpy (TransFile + len,"UW.LNG");
+
   // Find the configuration file (if present).
   strcpy (ConfigBuffer,FileName);
   if ((file = fopen (ConfigBuffer,"r")) == NULL)
     {
-      int len;
       strcpy (ConfigBuffer,argv0);
       len = strlen (ConfigBuffer);
       while (len > 0 && ConfigBuffer[len - 1] != '\\' &&

@@ -67,6 +67,7 @@ char	tempbuf[BUSIZ];			/* Temporary reception buffer */
 #define	FROMCHAR(x)	((x) - ' ')	/* Convert character to numeric val */
 FILE	*tfile=NULL;			/* Current transfer file */
 
+int
 main    (argc,argv)
 int     argc;
 char    *argv[];

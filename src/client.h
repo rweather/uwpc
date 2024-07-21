@@ -83,6 +83,9 @@ public:
 		   { window = wind; underneath = 0;
 		     isaterminal = 0; capture = 0; };
 
+	// Get the display window for this client.
+	UWDisplay *getwind (void) { return (window); };
+
 	// Set the pointer to the client underneath.
 	void	setunder (UWClient *under) { underneath = under; };
 
@@ -119,6 +122,9 @@ public:
 	// Mouse events are sent to the top-most window always.
 	virtual	void	mouse	(int x,int y,int buttons)
 		  { if (underneath) underneath -> mouse (x,y,buttons); };
+
+	// Process a timer event in the Windows 3.0 version.
+	virtual	void	timertick (void) {};
 
 };
 
@@ -164,6 +170,7 @@ protected:
 	int	argarray[TERM_ARGS];	// Array of arguments for esc seqs.
 	int	index;			// Index into argument array.
 	int	base;			// Base of array for extraction.
+	int	keytab;			// Secondary key table.
 
 	// Jump to the currently stored location.
 	void	jump		(void);

@@ -1,4 +1,4 @@
-		       Termcap Compiler Version 1.01
+		       Termcap Compiler Version 1.02
 
 	             Copyright (C) 1991 Rhys Weatherley
 
@@ -46,8 +46,8 @@ options can be specified:
 		Set the terminal emulation type for protocol 0.  This is
 		to rectify some problems with UNIX termcap entries that
 		are missing the entry for ADM31 terminals, as discussed 
-		above under "USING UW/PC".  It can be one of adm31, vt52
-		or ansi or a string specifying a terminal type loaded
+		in UW.DOC under "USING UW/PC".  It can be one of adm31,
+		vt52 or ansi or a string specifying a terminal type loaded
 		with the "terminal" configuration option.
 
 	terminal (no default)
@@ -109,6 +109,15 @@ the assembly code described in the next section.
 	number of args	- A 16-bit quantity that normally records how many
 			  arguments are in the argument array.  It can also
 			  be used as a loop counter.
+	second key table- When expanding keypresses to escape sequences, UW/PC
+			  looks at the code starting at the label "keys"
+			  for key expansions and then looks at the code
+			  starting at the label in the secondary key table
+			  register.  By default, there is no secondary key
+			  table.  The secondary key table register can be
+			  changed with the "keytab" instruction defined below
+			  and is intended for terminal emulations with more
+			  than one key assignment.  e.g. VT100.
 
 5. ASSEMBLY INSTRUCTIONS.
 
@@ -280,6 +289,14 @@ windows of that terminal type.
 		  appear in the "keys" section otherwise strange things may
 		  happen.
 
+	keytab	- Change the address of the secondary key table.  If the
+		  argument is a label, it indicates where the secondary key
+		  table starts, and if the argument is "none", then the
+		  secondary key table is disabled.  The code at the label
+		  given as an argument must consist of zero of more "key"
+		  instructions followed by an "endkeys" instruction.  Otherwise
+		  strange things may happen.
+
 	load	- Loads the instruction's argument into the accumulator.
 		  The argument can be numeric, "width" or "height".
 
@@ -315,6 +332,10 @@ windows of that terminal type.
 	ret	- Return from the current subroutine.  If you go up past
 		  the first return address on the return stack then it
 		  is not checked (for speed) and strange things may occur.
+
+	revlf	- Move the cursor up one line on the screen, staying
+		  in the same column.  At the top of the screen, the
+		  screen is scrolled up down line.
 
 	saveattr - Save the current printing attribute so it can be later
 		  restored using "restattr".
@@ -407,6 +428,9 @@ windows of that terminal type.
 		  placed every 8 characters, and the cursor will wrap to
 		  the start of the next line and will scroll the screen
 		  as necessary.
+
+	tabnd	- Same as "tab", but this version doesn't use spaces
+		  to do the tabbing.  i.e. it is a non-destructive tab.
 
 	test	- Takes a numeric argument which is a number between 0 and
 		  15 that indicates a bit in the flags register to be tested.

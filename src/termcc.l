@@ -27,6 +27,8 @@
      1.0    23/03/91  RW  Original Version of TERMCC.L
      1.1    25/01/91  RW  Add more instructions to support ANSI
      1.2    25/07/91  RW  Added the "client" instruction
+     1.3    10/12/91  RW  Add support for secondary key tables
+     			  and some extra stuff for VT100.
 
 -------------------------------------------------------------------------*/
 
@@ -113,6 +115,10 @@ saveattr		return (CMD_SAVEATTR);
 restattr		return (CMD_RESTATTR);
 insblank		return (CMD_INSBLANK);
 client			return (CMD_CLIENT);
+keytab			return (CMD_KEYTAB);
+none			return (VAL_NONE);
+tabnd			return (CMD_TABND);
+revlf			return (CMD_REVLF);
 [a-z_A-Z][a-z_A-Z0-9]*	{ if ((yylval = addident (yytext)) == -1)
 			    parsefatal ("Out of symbol table space");
 			   else

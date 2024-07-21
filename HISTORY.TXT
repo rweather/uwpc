@@ -19,6 +19,7 @@
 	and a client structure for supporting terminal emulations, file
 	transfers, etc.  (beta-release)
 2.01	Added clipboard routines.
+2.02	Get deeply into the Windows 3.0 port.  Add international support.
 
 			History of TERMCC Versions
 			==========================
@@ -27,3 +28,5 @@
 	VT52 and ADM31.
 1.01	Additions to help support ANSI emulation and a clean-up of
 	the command-line syntax - released with UW/PC 2.00.
+1.02	Add support for secondary key tables, and some extra things for
+	use in the VT100 terminal emulation.  Released with UW/PC 2.02.

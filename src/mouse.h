@@ -25,6 +25,7 @@
 //  Version  DD/MM/YY  By  Description
 //  -------  --------  --  --------------------------------------
 //    1.0    08/06/91  RW  Original Version of MOUSE.H
+//    1.1    14/12/91  RW  Add Windows 3.0 button values.
 //
 //-------------------------------------------------------------------------
 
@@ -37,8 +38,13 @@
 // Define constants for the mouse buttons.  Note that the
 // middle mouse button is not supported by UW/PC.
 //
+#ifdef	UWPC_DOS
 #define	MOUSE_LEFT	1
 #define	MOUSE_RIGHT	2
+#else	/* UWPC_DOS */
+#define	MOUSE_LEFT	MK_LBUTTON
+#define	MOUSE_RIGHT	MK_RBUTTON
+#endif	/* UWPC_DOS */
 
 //
 // The following variable will be non-zero when the mouse status

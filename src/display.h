@@ -61,6 +61,8 @@ protected:
 
 #ifdef	UWPC_WINDOWS
 	int	curson;			// Non-zero if the cursor is on.
+	BOOL	careton;		// TRUE if caret is on.
+	int	mousebuttons;		// Status of the mouse buttons.
 
 	// Repaint and area of the current window.  If hDC    //
 	// is NULL, then GetDC will be used to get a context. //
@@ -110,12 +112,18 @@ public:
 	// will be scrolled one line up in the scrolling colour.
 	void	lf	(void);
 
+	// Perform a reverse line feed on the display.  When
+	// the cursor is on the first display line, the display
+	// will be scrolled one line down in the scrolling colour.
+	void	revlf	(void);
+
 	// Move back one position on the display.  If 'wrap'
 	// is non-zero, wrap to previous lines as well.
 	void	bs	(int wrap=1);
 
 	// Tab across to the next tab stop of the supplied size.
-	void	tab	(int vt52wrap=0,int tabsize=8);
+	// If "nd" is non-zero then the tab is non-destructive.
+	void	tab	(int vt52wrap=0,int tabsize=8,int nd=0);
 
 	// Ring the terminal bell - this directly calls
 	// the hardware routines to ring it.
@@ -171,6 +179,11 @@ public:
 	int	copycut	(int x1,int y1,int x2,int y2,char *buffer);
 
 #ifdef	UWPC_WINDOWS
+	// Process a Windows 3.0 mouse message and create a
+	// UW/PC mouse message for the client attached to
+	// this particular window.
+	void	sendmouse (int x,int y);
+
 	// Process the messages for a display window.
 	// This is a catch-all after the master routine
 	// processes the messages.

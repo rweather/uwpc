@@ -25,6 +25,7 @@
 //  Version  DD/MM/YY  By  Description
 //  -------  --------  --  --------------------------------------
 //    1.0    08/06/91  RW  Original Version of CLIPBD.CPP
+//    1.1    14/12/91  RW  Fine tune for Windows 3.0.
 //
 //-------------------------------------------------------------------------
 
@@ -34,7 +35,9 @@
 #include "keys.h"		// Keyboard declarations.
 #include "uw.h"			// Master protocol routines.
 #include "mouse.h"		// Mouse handling routines.
+#ifdef	UWPC_DOS
 #include <dos.h>		// "delay" is defined here.
+#endif	/* UWPC_DOS */
 
 //
 // Define the global data for the clipboard.

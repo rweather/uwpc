@@ -6,7 +6,7 @@
     cannot be used simultaneously.
 
     This file is part of UW/PC - a multi-window comms package for the PC.
-    Copyright (C) 1990-1991  Rhys Weatherley
+    Copyright (C) 1990-1992  Rhys Weatherley
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@
       1.4    21/03/91  RW  Fix minor problem with sign extension in comreceive.
       1.5    22/03/91  RW  Fix COM port addressing & add COM3/COM4 support.
       1.6    31/10/91  RW  Add some more stuff for Windows 3.0 support.
+      1.7    28/02/92  RW  Add FOSSIL driver support.
 
 -----------------------------------------------------------------------------*/
 
@@ -70,6 +71,20 @@
 #define INT_MASK_2  0x08	/* Mask for PIC (programmable interrupt
 				   controller) 8259A */
 
+/* Declarations for FOSSIL drivers */
+
+#define	FOSSIL_INT	0x14	/* Interrupt number of FOSSIL driver */
+#define	FOS_INIT_PORT	0x00	/* FOSSIL function numbers */
+#define	FOS_SEND_CHAR	0x01
+#define	FOS_REC_CHAR	0x02
+#define	FOS_GET_STATUS	0x03
+#define	FOS_INIT_DRV	0x04
+#define	FOS_DEINIT_DRV	0x05
+#define	FOS_SET_DTR	0x06
+#define	FOS_SET_FLOW	0x0F
+#define	FOS_BLK_READ	0x18
+#define	FOS_SET_BREAK	0x1A
+
 /* Define the port addresses for the 4 serial ports. */
 /* These can be changed by the caller if necessary.  */
 int	_Cdecl	comports[4] = {0x3F8,0x2F8,0x3E8,0x2E8};
@@ -84,6 +99,7 @@ struct	IntBuf	{
 		  int	testbit;
 		  int	oldier,oldmcr,oldlcr,oldbaud;
 		  int	checkloss;
+		  int	fossil;
 		};
 
 static	struct	IntBuf	Com1Buf,Com2Buf;
@@ -119,9 +135,13 @@ int	port,on;
   switch (port)
     {
       case 1: case 3:
+      		if (Com1Buf.fossil)
+		  break;
       		Com1Buf.testbit = changetest (Com1Buf.dataport + COM_MCR,on);
 	        break;
       case 2: case 4:
+      		if (Com2Buf.fossil)
+		  break;
       		Com2Buf.testbit = changetest (Com2Buf.dataport + COM_MCR,on);
 	        break;
       default:	break;
@@ -136,12 +156,14 @@ int	port;
   switch (port)
     {
       case 1: case 3:
-      		outportb (Com1Buf.dataport + COM_MCR,0x0B |
-			  Com1Buf.testbit);	/* Raise DTR */
+      		if (!Com1Buf.fossil)
+      		  outportb (Com1Buf.dataport + COM_MCR,0x0B |
+			    Com1Buf.testbit);	/* Raise DTR */
 		return (Com1Buf.size);
       case 2: case 4:
-      		outportb (Com2Buf.dataport + COM_MCR,0x0B |
-			  Com2Buf.testbit);	/* Raise DTR */
+      		if (!Com2Buf.fossil)
+      		  outportb (Com2Buf.dataport + COM_MCR,0x0B |
+			    Com2Buf.testbit);	/* Raise DTR */
 		return (Com2Buf.size);
       default:	return 0;
     }
@@ -178,7 +200,23 @@ int	port;
   switch (port)
     {
       case 1: case 3:
-      		outportb (Com1Buf.dataport + COM_MCR,0x0B |
+      		if (Com1Buf.fossil)
+		  {
+		    if (Com1Buf.size == 0)
+		      {
+		        /* Read some characters from the FOSSIL */
+		        _ES = FP_SEG((char far *)Com1Buf.buffer);
+		        _DI = FP_OFF((char far *)Com1Buf.buffer);
+		        _DX = port - 1;
+		        _CX = MAX_INT_BUFSIZ;
+		        _AH = FOS_BLK_READ;
+		        geninterrupt (FOSSIL_INT);
+			Com1Buf.size = _AX;
+			Com1Buf.output = 0;
+		      } /* if */
+		  } /* then */
+		 else
+      		  outportb (Com1Buf.dataport + COM_MCR,0x0B |
 				Com1Buf.testbit);	/* Raise DTR */
 		if (Com1Buf.size == 0) return -1;
 		else {
@@ -189,7 +227,23 @@ int	port;
 			return (ch & 255);
 		}
       case 2: case 4:
-      		outportb (Com2Buf.dataport + COM_MCR,0x0B |
+      		if (Com2Buf.fossil)
+		  {
+		    if (Com2Buf.size == 0)
+		      {
+		        /* Read some characters from the FOSSIL */
+		        _ES = FP_SEG((char far *)Com2Buf.buffer);
+		        _DI = FP_OFF((char far *)Com2Buf.buffer);
+		        _DX = port - 1;
+		        _CX = MAX_INT_BUFSIZ;
+		        _AH = FOS_BLK_READ;
+		        geninterrupt (FOSSIL_INT);
+			Com2Buf.size = _AX;
+			Com2Buf.output = 0;
+		      } /* if */
+		  } /* then */
+		 else
+      		  outportb (Com2Buf.dataport + COM_MCR,0x0B |
 				Com2Buf.testbit);	/* Raise DTR */
 		if (Com2Buf.size == 0) return -1;
 		else {
@@ -297,9 +351,33 @@ int	port;
   outportb(port + COM_IER,1);
 }
 
+/*
+ * Check for the presence of a FOSSIL driver.
+ */
+static	int	comfossil (port,ctsrts)
+int	port,ctsrts;
+{
+  int ctsbits;
+  _DX = port - 1;
+  _AH = FOS_INIT_DRV;
+  _BX = 0;
+  geninterrupt (FOSSIL_INT);
+  if (_AX != 0x1954)
+    return (0);
+  if (ctsrts)
+    ctsbits = 0xF2;
+   else
+    ctsbits = 0xF0;
+  _DX = port - 1;
+  _AL = ctsbits;
+  _AH = FOS_SET_FLOW;
+  geninterrupt (FOSSIL_INT);
+  return (1);
+} /* comfossil */
+
 /* Enable a COM port for Interrupt Driven I/O by this module */
-int	_Cdecl	comenable(port)
-int	port;
+int	_Cdecl	comenable(port,flags)
+int	port,flags;
 {
   char ch;
   int dataport;
@@ -316,19 +394,26 @@ int	port;
 		Com1Buf.testbit = 0;
 		Com1Buf.checkloss = 0;	/* Don't check for carrier loss */
 
-		doenable (dataport);	/* Setup the regs */
+		/* Do the direct or FOSSIL initialisation */
+		Com1Buf.fossil = (flags & COMEN_FOSSIL) != 0;
+		if (Com1Buf.fossil && !comfossil (port,flags & COMEN_CTSRTS))
+		  Com1Buf.fossil = 0;		/* No installed FOSSIL */
+		if (!Com1Buf.fossil)
+		  {
+		    doenable (dataport);	/* Setup the regs */
 
-		/* Setup the ISR details */
-		old_c1 = getvect(COM_INT_1); /* Save old COM1 int */
-		setvect(COM_INT_1,int_com1); /* Install new int */
+		    /* Setup the ISR details */
+		    old_c1 = getvect(COM_INT_1); /* Save old COM1 int */
+		    setvect(COM_INT_1,int_com1); /* Install new int */
 
-		/* Now turn on DTR, RTS and OUT2: all ready */
-		outportb(dataport + COM_MCR,0x0B);
+		    /* Now turn on DTR, RTS and OUT2: all ready */
+		    outportb(dataport + COM_MCR,0x0B);
 
-		/* Program the PIC to handle COM1 interrupts */
-		ch = inportb(PIC_MASK);	/* Read current mask */
-		ch &= (0xFF^INT_MASK_1);/* Reset mask for COM1 */
-		outportb(PIC_MASK,ch);	/* Send it to the 8259A */
+		    /* Program the PIC to handle COM1 interrupts */
+		    ch = inportb(PIC_MASK);	/* Read current mask */
+		    ch &= (0xFF^INT_MASK_1);/* Reset mask for COM1 */
+		    outportb(PIC_MASK,ch);	/* Send it to the 8259A */
+		  } /* then */
 		break;
       case 2: case 4:
       		/* Initialise buffers for COM2 */
@@ -341,19 +426,26 @@ int	port;
 		Com2Buf.testbit = 0;
 		Com1Buf.checkloss = 0;	/* Don't check for carrier loss */
 
-		doenable (dataport);	/* Setup the regs */
+		/* Do the direct or FOSSIL initialisation */
+		Com2Buf.fossil = (flags & COMEN_FOSSIL) != 0;
+		if (Com2Buf.fossil && !comfossil (port,flags & COMEN_CTSRTS))
+		  Com2Buf.fossil = 0;		/* No installed FOSSIL */
+		if (!Com2Buf.fossil)
+		  {
+		    doenable (dataport);	/* Setup the regs */
 
-		/* Setup the ISR details */
-		old_c2 = getvect(COM_INT_2); /* Save old COM2 int */
-		setvect(COM_INT_2,int_com2); /* Install new int */
+		    /* Setup the ISR details */
+		    old_c2 = getvect(COM_INT_2); /* Save old COM2 int */
+		    setvect(COM_INT_2,int_com2); /* Install new int */
 
-		/* Now turn on DTR, RTS and OUT2: all ready */
-		outportb(dataport + COM_MCR,0x0B);
+		    /* Now turn on DTR, RTS and OUT2: all ready */
+		    outportb(dataport + COM_MCR,0x0B);
 
-		/* Program the PIC to handle COM2 interrupts */
-		ch = inportb(PIC_MASK);	/* Read current mask */
-		ch &= (0xFF^INT_MASK_2);/* Reset mask for COM2 */
-		outportb(PIC_MASK,ch);	/* Send it to the 8259A */
+		    /* Program the PIC to handle COM2 interrupts */
+		    ch = inportb(PIC_MASK);	/* Read current mask */
+		    ch &= (0xFF^INT_MASK_2);/* Reset mask for COM2 */
+		    outportb(PIC_MASK,ch);	/* Send it to the 8259A */
+		  } /* then */
 		break;
       default:	return (0);
     }
@@ -369,6 +461,8 @@ int	port;
   switch (port)
     {
       case 1: case 3:
+      		if (Com1Buf.fossil)
+		  break;
       		dataport = comports[port - 1];
 		Com1Buf.oldlcr = inportb (dataport + COM_LCR);
 		Com1Buf.oldmcr = inportb (dataport + COM_MCR);
@@ -379,6 +473,8 @@ int	port;
 		outportb (dataport + COM_LCR,Com1Buf.oldlcr);
       		break;
       case 2: case 4:
+      		if (Com2Buf.fossil)
+		  break;
       		dataport = comports[port - 1];
 		Com2Buf.oldlcr = inportb (dataport + COM_LCR);
 		Com2Buf.oldmcr = inportb (dataport + COM_MCR);
@@ -400,28 +496,50 @@ int	port,params;
 	   {0x0417,0x0300,0x0180,0x00E0,0x0060,
 	    0x0030,0x0018,0x000C,0x0006,0x0003,
 	    0x0002,0x0001};
-  int value,dataport;
+  static int bitmasks[12] =		/* Bitmasks for FOSSIL baud rates */
+  	   {-1,-1,0100,0140,0200,0240,0300,0340,0000,0040,-2,-2};
+  int value,dataport,fossil;
   switch (port)
     {
       case 1: case 3:
+      		fossil = Com1Buf.fossil;
       		dataport = Com1Buf.dataport; break;
       case 2: case 4:
+      		fossil = Com2Buf.fossil;
       		dataport = Com2Buf.dataport; break;
       default: return;
     }
-  if (params & BITS_8)
-    value = 0x03;
+  if (fossil)
+    value = bitmasks[params & BAUD_RATE];
    else
-    value = 0x02;
+    value = 0;
+  if (value == -1)
+    value = bitmasks[BAUD_300];	/* Default 300 baud for small FOSSIL rates */
+   else if (value == -2)
+    value = bitmasks[BAUD_38400]; /* Default 38400 for high FOSSIL rates */
+  if (params & BITS_8)
+    value |= 0x03;
+   else
+    value |= 0x02;
   if (params & STOP_2)
     value |= 0x04;
   if (params & PARITY_ODD)
     value |= 0x08;
    else if (params & PARITY_EVEN)
     value |= 0x18;
-  outportb (dataport + COM_LCR,value | 0x80);	/* Set params and DLAB */
-  outport  (dataport,divisors[params & BAUD_RATE]); /* Set the baud rate */
-  outportb (dataport + COM_LCR,value);		/* Clear DLAB bit */
+  if (!fossil)
+    {
+      outportb (dataport + COM_LCR,value | 0x80); /* Set params and DLAB */
+      outport  (dataport,divisors[params & BAUD_RATE]); /* Set the baud rate */
+      outportb (dataport + COM_LCR,value);		/* Clear DLAB bit */
+    } /* then */
+   else
+    {
+      _DX = port - 1;
+      _AL = value;
+      _AH = FOS_INIT_PORT;
+      geninterrupt (FOSSIL_INT);
+    } /* else */
 }
 
 /* Disable the interrupt I/O for a COM port */
@@ -433,36 +551,54 @@ int	port,leavedtr;
   switch (port)
     {
       case 1: case 3:
-      		ch = inportb(PIC_MASK);	/* Get 8259A (PIC) Mask */
-		ch |= INT_MASK_1;	/* Set Interrupt Mask COM1 */
-		outportb(PIC_MASK,ch);	/* Write int. mask to 8259A*/
+      		if (!Com1Buf.fossil)
+		  {
+      		    ch = inportb(PIC_MASK);	/* Get 8259A (PIC) Mask */
+		    ch |= INT_MASK_1;	/* Set Interrupt Mask COM1 */
+		    outportb(PIC_MASK,ch);	/* Write int. mask to 8259A*/
 
-		/* Clear the interrupt enable register */
-		outportb(Com1Buf.dataport + COM_IER,0);
+		    /* Clear the interrupt enable register */
+		    outportb(Com1Buf.dataport + COM_IER,0);
 
-		/* Clear OUT2, and set DTR as required */
-		if (leavedtr)
-		  outportb(Com1Buf.dataport + COM_MCR,1);
+		    /* Clear OUT2, and set DTR as required */
+		    if (leavedtr)
+		      outportb(Com1Buf.dataport + COM_MCR,1);
+		     else
+		      outportb(Com1Buf.dataport + COM_MCR,0);
+
+		    setvect(COM_INT_1,old_c1);/* Restore COM1 int */
+		  } /* then */
 		 else
-		  outportb(Com1Buf.dataport + COM_MCR,0);
-
-		setvect(COM_INT_1,old_c1);/* Restore COM1 int */
+		  {
+		    _DX = port - 1;
+		    _AH = FOS_DEINIT_DRV;
+		    geninterrupt (FOSSIL_INT);
+		  } /* else */
 		break;
       case 2: case 4:
-      		ch = inportb(PIC_MASK);	/* Get 8259A (PIC) Mask */
-		ch |= INT_MASK_2;	/* Set Interrupt Mask COM1 */
-		outportb(PIC_MASK,ch);	/* Write int. mask to 8259A*/
+      		if (!Com2Buf.fossil)
+		  {
+      		    ch = inportb(PIC_MASK);	/* Get 8259A (PIC) Mask */
+		    ch |= INT_MASK_2;	/* Set Interrupt Mask COM1 */
+		    outportb(PIC_MASK,ch);	/* Write int. mask to 8259A*/
 
-		/* Clear the interrupt enable register */
-		outportb(Com2Buf.dataport + COM_IER,0);
+		    /* Clear the interrupt enable register */
+		    outportb(Com2Buf.dataport + COM_IER,0);
 
-		/* Clear OUT2, and set DTR as required */
-		if (leavedtr)
-		  outportb(Com2Buf.dataport + COM_MCR,1);
+		    /* Clear OUT2, and set DTR as required */
+		    if (leavedtr)
+		      outportb(Com2Buf.dataport + COM_MCR,1);
+		     else
+		      outportb(Com2Buf.dataport + COM_MCR,0);
+
+		    setvect(COM_INT_2,old_c2);/* Restore COM2 int */
+		  } /* then */
 		 else
-		  outportb(Com2Buf.dataport + COM_MCR,0);
-
-		setvect(COM_INT_2,old_c2);/* Restore COM2 int */
+		  {
+		    _DX = port - 1;
+		    _AH = FOS_DEINIT_DRV;
+		    geninterrupt (FOSSIL_INT);
+		  } /* else */
 		break;
       default:	break;
     }
@@ -477,6 +613,8 @@ int	port,leavedtr;
   switch (port)
     {
       case 1: case 3:
+      		if (Com1Buf.fossil)
+		  break;
       		dataport = comports[port - 1];
 		outportb (dataport + COM_LCR,Com1Buf.oldlcr & 0x7F);
 		outportb (dataport + COM_IER,Com1Buf.oldier);
@@ -488,6 +626,8 @@ int	port,leavedtr;
 		outportb (dataport + COM_MCR,Com1Buf.oldmcr);
       		break;
       case 2: case 4:
+      		if (Com2Buf.fossil)
+		  break;
       		dataport = comports[port - 1];
 		outportb (dataport + COM_LCR,Com2Buf.oldlcr & 0x7F);
 		outportb (dataport + COM_IER,Com2Buf.oldier);
@@ -520,14 +660,34 @@ unsigned char ch;
   switch (port)
     {
       case 1: case 3:
-      		outportb (Com1Buf.dataport + COM_MCR,0x0B |
+      		if (!Com1Buf.fossil)
+		  {
+      		    outportb (Com1Buf.dataport + COM_MCR,0x0B |
 				Com1Buf.testbit);	/* Raise DTR */
-		dosend (Com1Buf.dataport,Com1Buf.statport,ch);
+		    dosend (Com1Buf.dataport,Com1Buf.statport,ch);
+		  } /* then */
+		 else
+		  {
+		    _DX = port - 1;
+		    _AL = ch;
+		    _AH = FOS_SEND_CHAR;
+		    geninterrupt (FOSSIL_INT);
+		  } /* else */
 		break;
       case 2: case 4:
-      		outportb (Com2Buf.dataport + COM_MCR,0x0B |
+      		if (!Com2Buf.fossil)
+		  {
+      		    outportb (Com2Buf.dataport + COM_MCR,0x0B |
 				Com2Buf.testbit);	/* Raise DTR */
-		dosend (Com2Buf.dataport,Com2Buf.statport,ch);
+		    dosend (Com2Buf.dataport,Com2Buf.statport,ch);
+		  } /* then */
+		 else
+		  {
+		    _DX = port - 1;
+		    _AL = ch;
+		    _AH = FOS_SEND_CHAR;
+		    geninterrupt (FOSSIL_INT);
+		  } /* else */
 		break;
       default:	break;
     }
@@ -541,11 +701,31 @@ int	port;
   switch (port)
     {
       case 1: case 3:
-      	      dataport = comports[port - 1];	/* Get dataport address */
-      	      return ((inportb (dataport + COM_MSR) & 0x80) != 0);
+      	      if (!Com1Buf.fossil)
+	        {
+      	          dataport = comports[port - 1]; /* Get dataport address */
+      	          return ((inportb (dataport + COM_MSR) & 0x80) != 0);
+		} /* then */
+	       else
+	        {
+		  _DX = port - 1;
+		  _AH = FOS_GET_STATUS;
+		  geninterrupt (FOSSIL_INT);
+		  return ((_AL & 0x80) != 0);
+		} /* else */
       case 2: case 4:
-              dataport = comports[port - 1];	/* Get dataport address */
-      	      return ((inportb (dataport + COM_MSR) & 0x80) != 0);
+      	      if (!Com2Buf.fossil)
+	        {
+                  dataport = comports[port - 1]; /* Get dataport address */
+      	          return ((inportb (dataport + COM_MSR) & 0x80) != 0);
+	        } /* then */
+	       else
+	        {
+		  _DX = port - 1;
+		  _AH = FOS_GET_STATUS;
+		  geninterrupt (FOSSIL_INT);
+		  return ((_AL & 0x80) != 0);
+		} /* else */
       default: return 0;
     }
 }
@@ -593,8 +773,12 @@ int	port;
   switch (port)
     {
       case 1: case 3:
+      		if (!Com1Buf.fossil)
+		  return (1);
       		return ((inportb (Com1Buf.dataport + COM_MSR) & 0x20) != 0);
       case 2: case 4:
+      		if (!Com2Buf.fossil)
+		  return (1);
       		return ((inportb (Com2Buf.dataport + COM_MSR) & 0x20) != 0);
       default: return 0;
     }
@@ -609,10 +793,14 @@ int	port;
   switch (port)
     {
       case 1: case 3:
+      	      if (!Com1Buf.fossil)
+	        return (1);
       	      outportb (Com1Buf.dataport + COM_MCR,0x0B |
       				Com1Buf.testbit);	/* Raise DTR */
       	      return ((inportb (Com1Buf.statport) & 0x20) != 0);
       case 2: case 4:
+      	      if (!Com2Buf.fossil)
+	        return (1);
       	      outportb (Com2Buf.dataport + COM_MCR,0x0B |
       				Com2Buf.testbit);	/* Raise DTR */
               return ((inportb (Com2Buf.statport) & 0x20) != 0);
@@ -627,11 +815,33 @@ int	port;
   switch (port)
     {
       case 1: case 3:
-      		outportb (Com1Buf.dataport + COM_MCR,0x0A |
-				Com1Buf.testbit); break;
+      		if (!Com1Buf.fossil)
+		  {
+      		    outportb (Com1Buf.dataport + COM_MCR,0x0A |
+				Com1Buf.testbit);
+		  } /* then */
+		 else
+		  {
+		    _DX = port - 1;
+		    _AH = FOS_SET_DTR;
+		    _AL = 0;
+		    geninterrupt (FOSSIL_INT);
+		  } /* else */
+		break;
       case 2: case 4:
-      		outportb (Com2Buf.dataport + COM_MCR,0x0A |
-				Com2Buf.testbit); break;
+      		if (!Com2Buf.fossil)
+		  {
+      		    outportb (Com2Buf.dataport + COM_MCR,0x0A |
+				Com2Buf.testbit);
+		  } /* then */
+		 else
+		  {
+		    _DX = port - 1;
+		    _AH = FOS_SET_DTR;
+		    _AL = 0;
+		    geninterrupt (FOSSIL_INT);
+		  } /* else */
+		break;
     }
 }
 
@@ -642,11 +852,33 @@ int	port;
   switch (port)
     {
       case 1: case 3:
-      		outportb (Com1Buf.dataport + COM_MCR,0x0B |
-				Com1Buf.testbit); break;
+      		if (!Com1Buf.fossil)
+		  {
+      		    outportb (Com1Buf.dataport + COM_MCR,0x0B |
+				Com1Buf.testbit);
+		  } /* then */
+		 else
+		  {
+		    _DX = port - 1;
+		    _AH = FOS_SET_DTR;
+		    _AL = 1;
+		    geninterrupt (FOSSIL_INT);
+		  } /* else */
+		break;
       case 2: case 4:
-      		outportb (Com2Buf.dataport + COM_MCR,0x0B |
-				Com2Buf.testbit); break;
+      		if (!Com2Buf.fossil)
+		  {
+      		    outportb (Com2Buf.dataport + COM_MCR,0x0B |
+				Com2Buf.testbit);
+		  } /* then */
+		 else
+		  {
+		    _DX = port - 1;
+		    _AH = FOS_SET_DTR;
+		    _AL = 1;
+		    geninterrupt (FOSSIL_INT);
+		  } /* else */
+		break;
       default: break;
     }
 }
@@ -658,13 +890,35 @@ int	port,value;
   switch (port)
     {
       case 1: case 3:
-      	      outportb (Com1Buf.dataport + COM_LCR,
-		(value ? inportb (Com1Buf.dataport + COM_LCR) | 0x40
-		       : inportb (Com1Buf.dataport + COM_LCR) & 0xBF));
+      	      if (!Com1Buf.fossil)
+	        {
+      	          outportb (Com1Buf.dataport + COM_LCR,
+		    (value ? inportb (Com1Buf.dataport + COM_LCR) | 0x40
+		           : inportb (Com1Buf.dataport + COM_LCR) & 0xBF));
+		} /* then */
+	       else
+	        {
+		  _DX = port - 1;
+		  _AL = value;
+		  _AH = FOS_SET_BREAK;
+		  geninterrupt (FOSSIL_INT);
+		} /* else */
+	      break;
       case 2: case 4:
-      	      outportb (Com2Buf.dataport + COM_LCR,
-		(value ? inportb (Com2Buf.dataport + COM_LCR) | 0x40
-		       : inportb (Com2Buf.dataport + COM_LCR) & 0xBF));
+      	      if (!Com2Buf.fossil)
+	        {
+      	          outportb (Com2Buf.dataport + COM_LCR,
+		    (value ? inportb (Com2Buf.dataport + COM_LCR) | 0x40
+		           : inportb (Com2Buf.dataport + COM_LCR) & 0xBF));
+		} /* then */
+	       else
+	        {
+		  _DX = port - 1;
+		  _AL = value;
+		  _AH = FOS_SET_BREAK;
+		  geninterrupt (FOSSIL_INT);
+		} /* else */
+	      break;
       default: break;
     }
 }
@@ -678,6 +932,8 @@ int	port;
   switch (port)
     {
       case 1: case 3:
+      		if (Com1Buf.fossil)
+		  break;
       		/* Restore the serial port interrupts for COM1 */
 		outportb(Com1Buf.dataport + COM_IER,1);
 		outportb(Com1Buf.dataport + COM_MCR,0x0B);
@@ -686,6 +942,8 @@ int	port;
 		outportb(PIC_MASK,ch);	/* Send it to the 8259A */
 		break;
       case 2: case 4:
+      		if (Com2Buf.fossil)
+		  break;
       		/* Restore the serial port interrupts for COM2 */
 		outportb(Com2Buf.dataport + COM_IER,1);
 		outportb(Com2Buf.dataport + COM_MCR,0x0B);

@@ -27,6 +27,9 @@
 //  -------  --------  --  --------------------------------------
 //    1.0    04/04/91  RW  Original Version of TERMINAL.CPP
 //    1.1    25/07/91  RW  Add handling of UW/PC clients.
+//    1.2    08/12/91  RW  Add international language support.
+//    1.3    10/12/91  RW  Add support for secondary key tables
+//			   and extra stuff for VT100.
 //
 //-------------------------------------------------------------------------
 
@@ -214,6 +217,13 @@ void	UWTermDesc::interpret (int ch)
 	case OP_INSBLANK:	window -> inschar (-1); break;
 	case OP_CLIENT:		UWMaster.startclient (acc);
 				break;
+	case OP_KEYTAB:		keytab = (description[PC] & 255) |
+					 ((description[PC + 1] & 255) << 8);
+				PC += 2;
+				break;
+	case OP_KEYTAB_NONE:	keytab = -1; break;
+	case OP_TABND:		window -> tab (0,8,1); break;
+	case OP_REVLF:		window -> revlf (); break;
 	default:		break;
       } // switch //
 } // UWTermDesc::interpret //
@@ -236,6 +246,20 @@ void	UWTermDesc::key (int keypress)
         break;				// Found the key or no match at all.
       posn += description[posn] & 255;	// Skip past the string to the next one
     }
+  if (!match && keytab != -1)
+    {
+      // Try the secondary key table if it is present //
+      posn = keytab;			// Want to scan key mapping table.
+      while (1)
+        {
+          match = (description[posn] & 255) |
+	  		((description[posn + 1] & 255) << 8);
+          posn += 2;
+          if (!match || keypress == match)
+            break;			   // Found the key or no match at all.
+          posn += description[posn] & 255; // Skip past the current string.
+        }
+    }
   if (match)
     {
       // Output the characters associated with the key mapping //
@@ -252,6 +276,7 @@ void	UWTermDesc::key (int keypress)
 // be called at any time while the client is active.
 void	UWTermDesc::remote (int ch)
 {
+  ch = UWConfig.PrintTransTable[ch];	// Do language translation.
   if (description == 0)
     {
       UWTerminal::remote (ch);		// Emulate a "really dumb" terminal.
@@ -285,6 +310,7 @@ void	UWTermDesc::setemul (unsigned char far *desc)
   SP = 0;
   savex = 0;
   savey = 0;
+  keytab = -1;
   saveattr = window -> getattr ();
   interpret (0);			// Execute till first character get.
 } // UWTermDesc::setemul //

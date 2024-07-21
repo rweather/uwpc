@@ -106,6 +106,7 @@
 
 /* Define the standard UW terminal types */
 
+#define	UWT_UNKNOWN	-1	/* Used by UW/PC for Protocol 1 */
 #define	UWT_ADM31	0	/* ADM-31 cursor-addressible terminal */
 #define	UWT_VT52	1	/* VT52 cursor-addressible terminal */
 #define	UWT_ANSI	2	/* ANSI-compatible terminal */

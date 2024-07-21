@@ -117,6 +117,8 @@ int	GetKeyPress (void)
         return (NEXTWIN_KEY);
        else if (key == 0x5300)
         return (0x7F);		/* Delete key => ASCII 'DEL' character */
+       else if (key == 0x9200)	/* CTRL-INSERT -> ALT-C */
+        return (CUT_KEY);
        else if (key >= 0x3B00 && key <= 0x4400 &&
        		UWConfig.FKeys[(key >> 8) - 0x3B][0] != '\0')
         ExpandKey = UWConfig.FKeys[(key >> 8) - 0x3B];

@@ -25,6 +25,7 @@
 //  Version  DD/MM/YY  By  Description
 //  -------  --------  --  --------------------------------------
 //    1.0    23/03/91  RW  Original Version of CONFIG.H
+//    1.1    08/12/91  RW  Add international language support.
 //
 //-------------------------------------------------------------------------
 
@@ -48,6 +49,7 @@
 #define	STR_LEN		101
 #define	MAX_DESCS	5
 #define	FONT_STR_LEN	16
+#define	MAX_CHARS	256
 class	UWConfiguration {
 
 private:
@@ -59,6 +61,9 @@ private:
 
 	// Abort the configuration with an "illegal" config message.
 	void	illegal	(char *msg);
+
+	// Load a particular language into memory.
+	void	loadlang (char *language);
 
 	// Load a new terminal description from the given filename.
 	void	*LoadTerminal (char *filename);
@@ -74,6 +79,8 @@ public:
 
 	int	ComPort;		// COM port to be used in UW/PC.
 	int	ComParams;		// Communication parameters.
+	int	ComCtsRts;		// Non-zero for CTS/RTS handshaking.
+	int	ComFossil;		// Non-zero to use a FOSSIL driver.
 	int	StripHighBit;		// Non-zero for high bit strip.
 	char	DeviceParameters[16];	// String description of ComParams.
 	int	DisableStatusLine;	// Non-zero to disable status line.
@@ -104,6 +111,10 @@ public:
 	int	CursorSize;		// Shape of the screen cursor.
 	char	FontFace[FONT_STR_LEN];	// Name of font for Windows 3.0.
 	int	FontHeight;		// Height of the font for Windows 3.0.
+	unsigned char FontCharSet;	// Character set for Windows 3.0.
+	char	KeyTransTable[MAX_CHARS]; // Table to translate keys.
+	char	PrintTransTable[MAX_CHARS]; // Translation table for printing.
+	char	TransFile[STR_LEN];	// Name of translation table file.
 
 	UWConfiguration (void);		// Set the defaults.
 

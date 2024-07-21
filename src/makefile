@@ -101,8 +101,8 @@ timer.obj:	timer.h
 dialog.obj:	dialog.h uw.h client.h screen.h display.h extern.h keys.h \
 		config.h
 files.obj:	files.h client.h uw.h keys.h extern.h
-xmodem.obj:	files.h client.h uw.h timer.h display.h
-clipbd.obj:	clipbd.h client.h display.h keys.h uw.h mouse.h
+xmodem.obj:	files.h client.h uw.h timer.h display.h extern.h
+clipbd.obj:	clipbd.h client.h display.h keys.h uw.h mouse.h extern.h
 mouse.obj:	client.h mouse.h screen.h extern.h
 clients.obj:	uw.h mail.h client.h login.h display.h extern.h
 mail.obj:	uw.h mail.h client.h display.h extern.h config.h
@@ -112,18 +112,18 @@ login.obj:	uw.h client.h config.h login.h
 setmode.com:	setmode.scr
 		debug <setmode.scr
 
-# Create the backup ZIP file UWPC201X.ZIP
+# Create the backup ZIP file UWPC202X.ZIP
 backup:
-		-pkzip -u uwpc201x.zip *.c *.cpp *.h *.l *.y *.doc uw.cfg \
+		-pkzip -u uwpc202x.zip *.c *.cpp *.h *.l *.y *.doc uw.cfg \
 			uweg.cfg setmode.scr makefile history *.cap readme
 
 # Make a beta-release distribution (without server, etc) UWPC201B.ZIP
 beta:		uw.exe setmode.com
 		-tdstrip uw.exe
-		-pkzip -u uwpc201b.zip uw.exe *.doc uweg.cfg termcc.exe \
+		-pkzip -u uwpc202b.zip uw.exe *.doc uweg.cfg termcc.exe \
 				uwftp.c setmode.com history
 
-# Create the distribution ZIP file UWPC201.ZIP
+# Create the distribution ZIP file UWPC202.ZIP
 dist:		uw.exe termcc.exe setmode.com
 		mkdir dist
 		-tdstrip uw.exe
@@ -132,6 +132,7 @@ dist:		uw.exe termcc.exe setmode.com
 		copy uw.exe dist
 		copy uw.doc dist
 		copy uweg.cfg dist
+		copy uw.lng dist
 		copy termcc.exe dist
 		copy termcc.doc dist
 		copy setmode.com dist
@@ -143,8 +144,8 @@ dist:		uw.exe termcc.exe setmode.com
 		-pkzip -a dist\uw-src.zip readme *.c *.cpp *.h *.l *.y *.cap \
 				uw.rsp setmode.scr uwftp.doc makefile
 		copy uwserver.tar dist
-		del uwpc201.zip
-		-pkzip -a uwpc201.zip dist\*.*
+		del uwpc202.zip
+		-pkzip -a uwpc202.zip dist\*.*
 
 # Clean up all non-essential generated compilation files.
 clean:

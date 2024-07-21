@@ -6,7 +6,7 @@
     cannot be used simultaneously.
 
     This file is part of UW/PC - a multi-window comms package for the PC.
-    Copyright (C) 1990-1991  Rhys Weatherley
+    Copyright (C) 1990-1992  Rhys Weatherley
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -36,6 +36,7 @@
       1.4    21/03/91  RW  Fix minor problem with sign extension in comreceive.
       1.5    22/03/91  RW  Fix COM port addressing & add COM3/COM4 support.
       1.6    31/10/91  RW  Add some more stuff for Windows 3.0 support.
+      1.7    28/02/92  RW  Add FOSSIL driver support.
 
 -----------------------------------------------------------------------------*/
 
@@ -69,6 +70,9 @@
 #define	PARITY_ODD	0x40
 #define PARITY_EVEN	0x80
 
+#define	COMEN_FOSSIL	1		/* Flags for "comenable" */
+#define	COMEN_CTSRTS	2
+
 #ifdef	__STDC__
 #define	_Cdecl
 #else
@@ -84,7 +88,7 @@ extern	"C" {
 extern	int	_Cdecl	comports[4];
 
 /* Enable a COM port for Interrupt Driven I/O by this module */
-int	_Cdecl	comenable (int port);
+int	_Cdecl	comenable (int port,int flags);
 
 /* Save the current setting of a COM port to be restored later */
 /* Call this function before calling 'comenable' on the port.  */

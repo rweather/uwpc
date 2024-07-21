@@ -25,6 +25,7 @@
 //  Version  DD/MM/YY  By  Description
 //  -------  --------  --  --------------------------------------
 //    1.0    20/03/91  RW  Original Version of CLIENT.CPP
+//    1.1    08/12/91  RW  Add international language support.
 //
 //-------------------------------------------------------------------------
 
@@ -61,7 +62,7 @@ void	UWTerminal::key (int keypress)
    else if (keypress == 127 && UWConfig.SwapBSKeys)
     send (8);
    else if (keypress >= 0 && keypress <= 255)
-    send (keypress);		// Send the ASCII key over the serial line.
+    send (UWConfig.KeyTransTable[keypress]);
    else
     defkey (keypress);		// Process the keypress in the default way.
 } // UWTerminal::key //

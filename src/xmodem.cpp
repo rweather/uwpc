@@ -25,13 +25,17 @@
 //  Version  DD/MM/YY  By  Description
 //  -------  --------  --  --------------------------------------
 //    1.1    11/05/91  RW  Original Version of XMODEM.CPP
+//    1.2    08/12/91  RW  Windows 3.0 support and change "::name".
 //
 //-------------------------------------------------------------------------
 
 #include <stdio.h>		// Standard I/O routines.
+#include "extern.h"		// Determine whether DOS or Windows 3.0.
 #include "files.h"		// Declarations for this module.
 #include "uw.h"			// UW protocol master declarations.
+#ifdef	UWPC_DOS
 #include "timer.h"		// Timer handling routines.
+#endif	/* UWPC_DOS */
 #include "display.h"		// Display handling routines.
 
 #pragma	warn	-par
@@ -39,7 +43,7 @@
 //
 // Uncomment the following line to turn on debugging writes.
 //
-// #define	XMOD_DEBUG	1
+#define	XMOD_DEBUG	1
 
 //
 // Define the allowable states the file transfer can be in.
@@ -72,7 +76,11 @@
 #define	CAN		0x18
 #define	EOF_CHAR	0x1A
 
+#ifdef	UWPC_DOS
 #define	TICKS_PER_SEC	19	// Set at 19 to give "at least" one second.
+#else	/* UWPC_DOS */
+#define	TICKS_PER_SEC	(TIMER_FREQ + 1) // Frequency of the Windows 3.0 timer.
+#endif	/* UWPC_DOS */
 
 //
 // Define the starting states for each of the transfer types.
@@ -111,7 +119,9 @@ UWXYFileTransfer::UWXYFileTransfer (UWDisplay *wind,int type,int recv,
     }
   if (recv)
     {
+#ifndef	UWPC_WINDOWS
       timer = TimerCount - 1;	// Simulate an immediate timeout.
+#endif
       timeout = 0;
     }
    else
@@ -134,12 +144,17 @@ UWXYFileTransfer::~UWXYFileTransfer (void)
 //
 // Define the names of the various transfer types.
 //
-static	char	*TransferNames[] =
-	  {"XMDM","XMDMC","XMDM1","XMD1C","YMDM","YMDMB","YMDMG"};
+static	char	*TransferNamesSend[] =
+	  {"XSEND","XMDMC","XMDM1","XMD1C","YMDM","YMDMB","YMDMG"};
+static	char	*TransferNamesRecv[] =
+	  {"XRECV","XMDMC","XMDM1","XMD1C","YMDM","YMDMB","YMDMG"};
 
 char far *UWXYFileTransfer::name ()
 {
-  return ((char far *)TransferNames[kind]);
+  if (receive)
+    return ((char far *)TransferNamesRecv[kind]);
+   else
+    return ((char far *)TransferNamesSend[kind]);
 } // UWXYFileTransfer::name //
 
 // Cancel a transmission - a CAN character was received.
@@ -154,11 +169,22 @@ void	UWXYFileTransfer::cancel (void)
 // Setup the current state to perform a line purge.
 // This uses a 2-second instead of the standard
 // XMODEM 1-second timeout to allow for load on the remote host.
-#define	purge()		(state = ST_PURGE, timer = TimerCount, \
+#ifndef	UWPC_WINDOWS
+#define	purge()		(state = ST_PURGE, \
+			 timer = TimerCount, \
 			 timeout = 2 * TICKS_PER_SEC)
+#else
+#define	purge()		(state = ST_PURGE, \
+			 timeout = 2 * TICKS_PER_SEC)
+#endif
 
 // Setup a 1-second timeout for characters in a block.
-#define	one_sec_timeout() (timer = TimerCount, timeout = TICKS_PER_SEC)
+#ifndef	UWPC_WINDOWS
+#define	one_sec_timeout() (timer = TimerCount, \
+			   timeout = TICKS_PER_SEC)
+#else
+#define	one_sec_timeout() (timeout = TICKS_PER_SEC)
+#endif
 
 // Send the cancel sequence to the remote host.
 #define	cancel_seq()	{ int x; for (x = 0;x < 10;++x) send (CAN); \
@@ -169,8 +195,8 @@ void	UWXYFileTransfer::cancel (void)
 void	UWXYFileTransfer::process (int ch)
 {
 #ifdef	XMOD_DEBUG
-  /* if (ch != -1)
-    window -> send (ch); */
+  if (ch != -1)
+    window -> send (ch);
 #endif
   switch (state)
     {
@@ -184,8 +210,12 @@ void	UWXYFileTransfer::process (int ch)
 		  }
       		if (ch != SOH && ch != STX && ch != EOT)
 		  {
+		    if (ch == NAK || ch == ACK)
+		      break;	// Ignore these chars to stop echo loops.
 		    send (NAK);
+#ifndef	UWPC_WINDOWS
 		    timer = TimerCount;
+#endif
 		    timeout = 5 * TICKS_PER_SEC;
 		    state = ST_XREC;
 		    break;
@@ -226,7 +256,9 @@ void	UWXYFileTransfer::process (int ch)
       		if (ch == -1)
 		  {
 		    send ('C');
+#ifndef	UWPC_WINDOWS
 		    timer = TimerCount;
+#endif
 		    timeout = 3 * TICKS_PER_SEC;
 		    state = ST_XREC_CRC_2;	// Go back to normal transfer.
 		    break;
@@ -283,7 +315,9 @@ void	UWXYFileTransfer::process (int ch)
 		  {
 		    // Timeout occurred - line has been purged //
 		    send (NAK);
+#ifndef	UWPC_WINDOWS
 		    timer = TimerCount;
+#endif
 		    timeout = 5 * TICKS_PER_SEC;
 		    state = ST_XREC;		// Wait for a block again.
 		  }
@@ -454,14 +488,28 @@ void	UWXYFileTransfer::key (int keypress)
 
 void	UWXYFileTransfer::tick (void)
 {
+#ifdef	UWPC_DOS
   if (timeout != -1 && (TimerCount - timer) > timeout)
     {
       timeout = -1;		// Disallow another timeout.
       process (-1);		// Tell the state machine a timeout occurred.
     }
+#endif	/* UWPC_DOS */
   if (state == ST_SEND_DATA)
     process (-1);		// Need to send some data to remote.
 } // UWXYFileTransfer::tick //
+
+void	UWXYFileTransfer::timertick (void)
+{
+#ifdef	UWPC_WINDOWS
+  if (timeout != -1 &&
+      (--timeout) <= 0)
+    {
+      timeout = -1;		// Disallow another timeout.
+      process (-1);		// Tell the state machine a timeout occurred.
+    } /* if */
+#endif	/* UWPC_WINDOWS */
+} // UWXYFileTransfer::timertick //
 
 char	*UWXYFileTransfer::getstatus (void)
 {

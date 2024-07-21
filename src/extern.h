@@ -52,6 +52,11 @@
 void	UWDelay	(unsigned ms);
 #define	DELAY_FUNC	UWDelay
 
+// Define some timer values for setting up timers for file transfers.
+#define	TIMER_ELAPSED	250		// Elapsed time between timer events.
+#define	TIMER_FREQ	4		// Number of timer pulses per second.
+#define	TIMER_NUMBER	1		// Value attached to the timer.
+
 #endif /* _Windows */
 
 #endif	/* __EXTERN_H__ */
