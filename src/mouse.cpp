@@ -28,9 +28,7 @@
 //
 //-------------------------------------------------------------------------
 
-#if defined(USE_ASM)
 #pragma	inline			// Module contains inline assembly.
-#endif
 
 #include "mouse.h"		// Declarations for this module.
 #include "client.h"		// Client declarations.
@@ -61,15 +59,11 @@ static	int	MouseVisible;
 ///
 static	void	far MouseIntSubr (void)
 {
-#if defined(USE_ASM)
   asm push ds;
   asm mov ax,DGROUP;		// Restore the proper data segment address.
   asm mov ds,ax;
   MouseChange = 1;		// Record a change in the mouse status.
   asm pop ds;			// Restore DS and exit to mouse driver.
-#else
-  MouseChange = 1;		// Record a change in the mouse status.
-#endif
 } // MouseIntSubr //
 
 //

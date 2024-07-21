@@ -39,9 +39,7 @@
 
 -----------------------------------------------------------------------------*/
 
-#if defined(USE_ASM)
 #pragma	inline			/* There is inline assembly in this file */
-#endif
 
 #include "comms.h"		/* Declarations for this module */
 #include <dos.h>
@@ -209,7 +207,6 @@ int	port;
 
 static void interrupt int_com1()
 {
-#if defined(USE_ASM)
   asm cli;			/* Make sure ints are disabled */
   asm mov dx,Com1Buf.statport;	/* Check for errors */
   asm in al,dx;
@@ -241,31 +238,12 @@ static void interrupt int_com1()
   asm out dx,al;
   asm mov al,ah;
   asm out dx,al;
-#else
-  char ch;
-  disable();   /* Make sure ints are disabled */
-  /* If no error occured, then store the character */
-  if ((ch = (inportb(Com1Buf.statport)&ERR_MSK)) == 0)
-    {
-      ch = inportb(Com1Buf.dataport);/* Get the character */
-      if (Com1Buf.size < MAX_INT_BUFSIZ) /* Store the char */
-        {
-         Com1Buf.buffer[Com1Buf.input] = ch;
-         Com1Buf.input = (Com1Buf.input + 1) % MAX_INT_BUFSIZ;
-         ++Com1Buf.size;
-        }
-    }
-   else
-    ch = inportb(Com1Buf.dataport);/* Remove the erroneous character */
-  outportb(PIC_EOI,0x20);      /* Tell PIC we have handled the int */
-#endif
 }
 
 /*  COM2 Interrupt handler.  HARDWARE DEPENDENT */
 
 static void interrupt int_com2()
 {
-#if defined(USE_ASM)
   asm cli;			/* Make sure ints are disabled */
   asm mov dx,Com2Buf.statport;	/* Check for errors */
   asm in al,dx;
@@ -297,24 +275,6 @@ static void interrupt int_com2()
   asm out dx,al;
   asm mov al,ah;
   asm out dx,al;
-#else
-  char ch;
-  disable();   /* Make sure ints are disabled */
-  /* If no error occured, then store the character */
-  if ((ch = (inportb(Com2Buf.statport)&ERR_MSK)) == 0)
-    {
-      ch = inportb(Com2Buf.dataport);/* Get the character */
-      if (Com2Buf.size < MAX_INT_BUFSIZ) /* Store the char */
-        {
-         Com2Buf.buffer[Com2Buf.input] = ch;
-         Com2Buf.input = (Com2Buf.input + 1) % MAX_INT_BUFSIZ;
-         ++Com2Buf.size;
-        }
-    }
-   else
-    ch = inportb(Com2Buf.dataport);/* Remove the erroneous character */
-  outportb(PIC_EOI,0x20);      /* Tell PIC we have handled the int */
-#endif
 }
 
 /* Enable a COM port given its I/O port address */

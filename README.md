@@ -63,11 +63,12 @@ but everything else is available.  The final version 2.03 included a
 Windows 3.0 port but it is in an unfinished state.  I haven't checked
 2.03 in yet.
 
-The original MS-DOS code was designed to be built with Turbo C++.
-I switched to Borland C++ for the later Windows version.  You will need
-that or something similar if you want to build it.  I was able to
+The original MS-DOS code was designed to be built with Turbo C++ and
+Turbo Assembler.  I switched to Borland C++ for the later Windows version.
+You will need that or something similar if you want to build it.  I was able to
 successfully build the MS-DOS version with [DOSBox](https://www.dosbox.com/)
-after installing Turbo C++ 1.01 into the DOSBox environment.
+after installing Turbo C++ 1.01 and Turbo Assembler 4.0 into the
+DOSBox environment.
 
 John Bruner's original server code was designed to be built on mid-1980's
 BSD 4.3 systems and is written in K&R C.  It would need a lot of work to
