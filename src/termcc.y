@@ -3,7 +3,7 @@
   TERMCC.Y - Grammar for the Termcap Compiler.
  
     This file is part of the Termcap Compiler source code.
-    Copyright (C) 1990-1991  Rhys Weatherley
+    Copyright (C) 1990-1992  Rhys Weatherley
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -29,6 +29,7 @@
      1.2    25/07/91  RW  Added the "client" instruction
      1.3    10/12/91  RW  Add support for secondary key tables
      			  and some extra stuff for VT100.
+     1.4    15/03/92  RW  Implement terminal types.
 
 -------------------------------------------------------------------------*/
 
@@ -41,8 +42,17 @@
 %token CMD_GETXY CMD_GETX CMD_GETY CMD_SCRLUP CMD_SCRLDN CMD_SET CMD_RESET
 %token CMD_TEST CMD_NAME CMD_KEY CMD_ENDKEYS CMD_RESARR CMD_GETARG CMD_GETA
 %token CMD_DEC CMD_SHIFT CMD_SETC CMD_SAVEATTR CMD_RESTATTR CMD_INSBLANK
-%token CMD_CLIENT CMD_KEYTAB CMD_TABND CMD_REVLF
+%token CMD_CLIENT CMD_KEYTAB CMD_TABND CMD_REVLF CMD_TYPE CMD_MOVED CMD_MOVEL
+%token CMD_MOVER CMD_MOVEU CMD_MOVEREL CMD_MOVEH CMD_CLRMAP CMD_MAP
+%token CMD_JMPKEYS CMD_NAMES CMD_NAMECH CMD_REGION CMD_REMSTR CMD_REMNUM
+%token CMD_SETTAB CMD_RESTAB CMD_CLRTABS CMD_SETFORE CMD_SETBACK CMD_DEFTABS
+%token CMD_GETCHG CMD_GETCHG52 CMD_GETCHGI CMD_GETCHGI52 CMD_CLRRGN
+%token CMD_COPYATTR CMD_SETBOLD CMD_SETBOLDOFF CMD_SETBLINK CMD_SETBLINKOFF
+%token CMD_GETCHGS CMD_GETCHGSI CMD_ADDTITLE CMD_CLRTITLE CMD_SHOWTITLE
+%token CMD_DIRECT CMD_NODIRECT CMD_IF CMD_ALIGN
 %token NUMBER STRING IDENT COMMA SEMI COLON VAL_WIDTH VAL_HEIGHT VAL_NONE
+%token VAL_DIGIT VAL_ADM31 VAL_VT52 VAL_ANSI VAL_TEK4010 VAL_FTP VAL_PRINT
+%token VAL_PLOT VAL_UNKNOWN LHARD RHARD
 
 /* YYSTYPE is the semantic type for non-terminals and terminals */
 
@@ -50,6 +60,7 @@
 
 #include "opcodes.h"		/* Abstract machine opcodes */
 #include "symbols.h"		/* Symbol manipulation routines */
+#include "uwproto.h"		/* Terminal types are here */
 #include <stdio.h>
 
 #define yyoverflow	yyover	/* Where to go on overflows */
@@ -66,6 +77,16 @@ unsigned char	OutBuffer[BUFFER_SIZE];
 int	OutBufPosn=0;
 
 char	Buffer[100];
+
+int	termtype=127;		/* Terminal type to imbed in the description */
+int	newtermtype=127;
+
+char	TermName[60]="";	/* Terminal name for this description */
+char	DefTermName[60]="";	/* Default terminal name to use */
+char	KeyTabEntry[60] = "keys"; /* Default key table entry point */
+char	ReqTermName[60]="";	/* Requested terminal name for 'names' */
+int	HaveDefault=0;		/* Non-zero if got default already */
+int	TermIdent;		/* Identifier for the terminal name */
 
 %}
 
@@ -96,6 +117,18 @@ cmd:	  CMD_SEND
 		{ genbyte (OP_BSWRAP); }
 	| CMD_MOVE
 		{ genbyte (OP_MOVE); }
+	| CMD_MOVED
+		{ genbyte (OP_MOVED); }
+	| CMD_MOVEH
+		{ genbyte (OP_MOVEH); }
+	| CMD_MOVEL
+		{ genbyte (OP_MOVEL); }
+	| CMD_MOVER
+		{ genbyte (OP_MOVER); }
+	| CMD_MOVEREL
+		{ genbyte (OP_MOVEREL); }
+	| CMD_MOVEU
+		{ genbyte (OP_MOVEU); }
 	| CMD_CLEAR
 		{ genbyte (OP_CLEAR); }
 	| CMD_CLREOL
@@ -124,6 +157,19 @@ cmd:	  CMD_SEND
 		{ genbyte (OP_SETSCRL_ACC); }
 	| CMD_GETCH
 		{ genbyte (OP_GETCH); }
+	| CMD_GETCHG
+		{ genbyte (OP_GETCH); genbyte (OP_SENDG); }
+	| CMD_GETCHG52
+		{ genbyte (OP_GETCH); genbyte (OP_SENDG52); }
+	| CMD_GETCHGI NUMBER
+		{ genbyte (OP_GETCH); genbyte (OP_SENDGI); genbyte ($2); }
+	| CMD_GETCHGI52 NUMBER
+		{ genbyte (OP_GETCH); genbyte (OP_SENDGI52); genbyte ($2); }
+	| CMD_GETCHGS NUMBER
+		{ genbyte (OP_GETCH); genbyte (OP_SENDGS); genbyte ($2); }
+	| CMD_GETCHGSI NUMBER COMMA NUMBER
+		{ genbyte (OP_GETCH); genbyte (OP_SENDGSI); genbyte ($2);
+		  genbyte ($4); }
 	| CMD_SETX
 		{ genbyte (OP_SETX); }
 	| CMD_SETY
@@ -196,17 +242,26 @@ cmd:	  CMD_SEND
 	| CMD_TEST NUMBER
 		{ genbyte (OP_TEST); genbyte ($2); }
 	| CMD_NAME STRING
-		{ genstring ($2); }
+		{ genstring ($2); strcpy (TermName,getname ($2)); }
+	| CMD_NAMES LHARD termnames RHARD
+	| CMD_NAMECH NUMBER
+		{ genalt (OP_LOAD,OP_LOAD_WORD,TermName[$2]); }
 	| CMD_KEY NUMBER COMMA STRING
 		{ genword ($2); genstring2 ($4); }
 	| CMD_ENDKEYS
 		{ genword (0); }
+	| CMD_JMPKEYS ref
+		{ genword (-1); doaddref ($2,OutBufPosn); }
 	| CMD_RESARR
 		{ genbyte (OP_RESARR); }
 	| CMD_GETARG
 		{ genbyte (OP_GETCH); genbyte (OP_GETARG); }
 	| CMD_GETA NUMBER COMMA NUMBER
 		{ genbyte (OP_GETA); genbyte ($2); genbyte ($4); }
+	| CMD_GETA NUMBER COMMA VAL_WIDTH
+		{ genbyte (OP_GETA_WIDTH); genbyte ($2); }
+	| CMD_GETA NUMBER COMMA VAL_HEIGHT
+		{ genbyte (OP_GETA_HEIGHT); genbyte ($2); }
 	| CMD_DEC
 		{ genbyte (OP_DEC); }
 	| CMD_SHIFT
@@ -229,8 +284,58 @@ cmd:	  CMD_SEND
 		{ genbyte (OP_TABND); }
 	| CMD_REVLF
 		{ genbyte (OP_REVLF); }
+	| CMD_TYPE typecode
+		{ termtype = newtermtype; }
+	| CMD_TYPE typecode CMD_IF STRING
+		{ if (!strcmp (TermName,getname ($4))) termtype = newtermtype; }
 	| IDENT COLON
 		{ addposn ($1,OutBufPosn); }
+	| CMD_CLRMAP
+		{ genbyte (OP_CLRMAP); }
+	| CMD_MAP NUMBER COMMA NUMBER
+		{ genbyte (OP_MAP); genbyte ($2); genbyte ($4); }
+	| CMD_REGION
+		{ genbyte (OP_REGION); }
+	| CMD_CLRRGN
+		{ genbyte (OP_CLRRGN); }
+	| CMD_REMSTR STRING
+		{ genbyte (OP_REMSTR); genstring ($2); }
+	| CMD_REMNUM
+		{ genbyte (OP_REMNUM); }
+	| CMD_SETTAB
+		{ genbyte (OP_SETTAB); }
+	| CMD_RESTAB
+		{ genbyte (OP_RESTAB); }
+	| CMD_CLRTABS
+		{ genbyte (OP_CLRTABS); }
+	| CMD_DEFTABS
+		{ genbyte (OP_DEFTABS); }
+	| CMD_SETFORE
+		{ genbyte (OP_SETFORE); }
+	| CMD_SETBACK
+		{ genbyte (OP_SETBACK); }
+	| CMD_COPYATTR
+		{ genbyte (OP_COPYATTR); }
+	| CMD_SETBOLD
+		{ genbyte (OP_SETBOLD); }
+	| CMD_SETBOLDOFF
+		{ genbyte (OP_SETBOLDOFF); }
+	| CMD_SETBLINK
+		{ genbyte (OP_SETBLINK); }
+	| CMD_SETBLINKOFF
+		{ genbyte (OP_SETBLINKOFF); }
+	| CMD_ADDTITLE
+		{ genbyte (OP_ADDTITLE); }
+	| CMD_CLRTITLE
+		{ genbyte (OP_CLRTITLE); }
+	| CMD_SHOWTITLE
+		{ genbyte (OP_SHOWTITLE); }
+	| CMD_DIRECT
+		{ genbyte (OP_DIRECT); }
+	| CMD_NODIRECT
+		{ genbyte (OP_NODIRECT); }
+	| CMD_ALIGN
+		{ genbyte (OP_ALIGN); }
 	| error
 		{ parserr ("Illegal instruction"); }
 	;
@@ -246,8 +351,74 @@ switches: switches switch
 switch:	  NUMBER COMMA ref
 		{ genalt (OP_SWITCH,OP_SWITCH_WORD,$1);
 		  doaddref ($3,OutBufPosn); }
+	| VAL_DIGIT COMMA ref
+		{ genbyte (OP_SWITCH_DIGIT);
+		  doaddref ($3,OutBufPosn); }
 	| error
 		{ parserr ("Illegal switch"); }
+	;
+
+typecode: NUMBER
+		{ newtermtype = $1; }
+	| VAL_ADM31
+		{ newtermtype = UWT_ADM31; }
+	| VAL_VT52
+		{ newtermtype = UWT_VT52; }
+	| VAL_ANSI
+		{ newtermtype = UWT_ANSI; }
+	| VAL_TEK4010
+		{ newtermtype = UWT_TEK4010; }
+	| VAL_FTP
+		{ newtermtype = UWT_FTP; }
+	| VAL_PRINT
+		{ newtermtype = UWT_PRINT; }
+	| VAL_PLOT
+		{ newtermtype = UWT_PLOT; }
+	| VAL_UNKNOWN
+		{ newtermtype = 127; }
+	| error
+		{ parserr ("Illegal terminal type"); }
+	;
+
+termnames: tname tnames
+		{ if (TermName[0] == '\0')
+		    strcpy (TermName,DefTermName);
+		  if (TermName[0] == '\0' || !HaveDefault)
+		    parserr ("Terminal type to be compiled not found");
+		   else
+		    {
+		      /* Generate the code for the terminal name */
+		      genstring (TermIdent);
+		    } /* else */
+		}
+	| error
+		{ parserr ("Illegal list of terminal types"); }
+	;
+
+tnames:	  COMMA tname tnames
+	|
+	;
+
+tname:	  LHARD STRING COMMA IDENT RHARD
+		{ char *name = getname ($2);
+		  char *ident = getname ($4);
+		  if (!HaveDefault)
+		    {
+		      /* Set the default terminal type */
+		      strcpy (DefTermName,name);
+		      strcpy (KeyTabEntry,ident);
+		      TermIdent = $2;
+		      HaveDefault = 1;
+		    } /* if */
+		  if (TermName[0] == '\0' && ReqTermName[0] != '\0' &&
+		      !stricmp (ReqTermName,name))
+		    {
+		      /* Found the terminal type to be compiled */
+		      strcpy (TermName,name);
+		      strcpy (KeyTabEntry,ident);
+		      TermIdent = $2;
+		    } /* if */
+		}
 	;
 
 %%
@@ -384,10 +555,10 @@ fixups ()
       parserr ("No entry point 'start' defined");
       exit (1);
     } /* if */
-  if ((ident = addident ("keys")) == -1 ||
+  if ((ident = addident (KeyTabEntry)) == -1 ||
       (posn = getposn (ident)) == -1)
     {
-      parserr ("No entry point 'keys' defined");
+      parserr ("No entry point '%s' defined",KeyTabEntry);
       exit (1);
     } /* if */
 } /* fixups */
@@ -408,11 +579,12 @@ dumpcode ()
   posn = getposn (addident ("start"));
   fputc (posn & 255,outfile);
   fputc ((posn >> 8) & 255,outfile);
-  keys = getposn (addident ("keys"));
+  keys = getposn (addident (KeyTabEntry));
   fputc (keys & 255,outfile);
   fputc ((keys >> 8) & 255,outfile);
   fputc (UW_TERM_VERSION & 255,outfile);
   fputc ((UW_TERM_VERSION >> 8) & 255,outfile);
+  fputc (termtype,outfile);
   for (index = 0;index < OutBufPosn;++index)
     fputc (OutBuffer[index],outfile);
   fclose (outfile);

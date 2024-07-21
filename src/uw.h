@@ -3,7 +3,7 @@
 // UW.H - Declarations for the UW protocol within UW/PC.
 // 
 //  This file is part of UW/PC - a multi-window comms package for the PC.
-//  Copyright (C) 1990-1991  Rhys Weatherley
+//  Copyright (C) 1990-1992  Rhys Weatherley
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@
 //    1.0    23/03/91  RW  Original Version of UW.H
 //    1.1    05/05/91  RW  Cleanup phase.
 //    1.2    26/05/91  RW  Add command-line to "jumpdos".
+//    1.3    16/03/92  RW  Make things static to improve performance.
 //
 //-------------------------------------------------------------------------
 
@@ -51,10 +52,16 @@ class	UWProtocol {
 
 private:
 
+// Note: these were made static because the object lookup was
+// totally murdering performance in the main loops.  Since there
+// is only one instance of this class in UW/PC, this doesn't matter.
+
 	int	CurrWindow;	// Current window that is in use.
 	int	LastInput;	// Last input window.
 	int	RoundWindow;	// Round-robin service window.
 	int	OutputWindow;	// Current output window.
+	int	protoflags;	// Flags for the protocol decoding.
+	int	optflag;	// State variable for procoptions.
 	int	gotmeta;	// Non-zero for meta escape.
 	int	gotiac;		// Non-zero for IAC escape.
 	int	getpcl;		// For protocol negotiation.
@@ -70,6 +77,17 @@ private:
 
 	// Send a UW command to the remote host.
 	void	command (int cmd);
+
+	// Output a Protocol 2 option command to the remote host.
+	void	option	(int window,int action,int optnum);
+
+	// Output a numeric option argument to the remote host.
+	// If "longval" is non-zero, the argument is 12-bit, rather
+	// than 6-bit.
+	void	optarg	(int arg,int longval);
+
+	// Process a received option character for window "newwind".
+	void	procoptions (int ch);
 
 	// Send a character to the remote host in the
 	// round-robin service window.  This is called by
@@ -145,6 +163,11 @@ public:
 	// Bring a particular window to the top (i.e. make it
 	// the current window).
 	void	top	(int number);
+
+	// Change the number of the current window.  This is called
+	// by the Windows 3.0 version when a window becomes active.
+	void	setcurrent (int number)
+		  { if (clients[number]) CurrWindow = number; };
 
 	// Cycle around to the next window in Protocol 1/2.
 	void	nextwindow (void);

@@ -3,7 +3,7 @@
 // SCREEN.CPP - Direct screen accessing routines for textual displays.
 // 
 //  This file is part of UW/PC - a multi-window comms package for the PC.
-//  Copyright (C) 1990-1991  Rhys Weatherley
+//  Copyright (C) 1990-1992  Rhys Weatherley
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@
 //  -------  --------  --  --------------------------------------
 //    1.0    23/03/91  RW  Original Version of SCREEN.CPP
 //    1.1    26/05/91  RW  Add command-line to "jumpdos".
+//    1.2    14/03/92  RW  Add support for 43/50 line modes.
 //
 //-------------------------------------------------------------------------
 
@@ -50,7 +51,8 @@ ScreenClass	HardwareScreen;
 enum   ScreenFlags {
 	FLAG_MDA	= 1,		// MDA screen mode.
 	FLAG_SNOW	= 2,		// Snow checking is enabled.
-	FLAG_COLOR	= 4		// Screen mode is colour.
+	FLAG_COLOR	= 4,		// Screen mode is colour.
+	FLAG_LARGE	= 8		// Screen is in large 43/50 mode.
 };
 
 // Initialise the hardware screen.  Returns non-zero
@@ -62,6 +64,7 @@ int	ScreenClass::init (int color,int large)
   static unsigned char colrattrs[NUM_ATTRS] = {0x1F,0x71,0x1E,0x4E,0x41};
   int temp;
   gettextinfo (&ti);
+  origmode = ti.currmode;
   oldattr = ti.attribute;
   dialogenabled = 0;		// Disable the dialog box.
   if (ti.currmode == 7)
@@ -95,9 +98,15 @@ int	ScreenClass::init (int color,int large)
         attributes[temp] = UWConfig.NewAttrs[temp];
     }
   textmode (mode);
+  if (large && mode < 7)
+    {
+      textmode (C4350);
+      flags |= FLAG_LARGE;
+    }
   shape ((CursorShapes)UWConfig.CursorSize);
-  width = 80;
-  height = 25;
+  gettextinfo (&ti);
+  width = ti.screenwidth;
+  height = ti.screenheight;
   delay (10);		// Initialise Turbo C++'s delay timer.
   return (1);
 } // ScreenClass::init //
@@ -105,6 +114,7 @@ int	ScreenClass::init (int color,int large)
 // Terminate the hardware screen.
 void	ScreenClass::term (void)
 {
+  textmode (origmode);	// Return to the original text mode.
   shape (CURS_UNDERLINE);
   textattr (oldattr);
   clrscr ();
@@ -148,9 +158,15 @@ void	ScreenClass::bell (void)
   union REGS regs;
   if (UWConfig.BeepEnable)
     {
+#ifdef	OLD_BELL
       regs.x.ax = 0x0E07;
       regs.x.bx = 0;
       int86 (0x10,&regs,&regs);	// Call video BIOS to ring the bell.
+#else
+      sound (UWConfig.BellFreq);// Use the sound functions for the sound.
+      delay (UWConfig.BellDur);
+      nosound ();
+#endif
     }
 } // ScreenClass::bell //
 
@@ -205,7 +221,7 @@ void	ScreenClass::draw (int x,int y,unsigned pair,int dialog)
 } // ScreenClass::draw //
 
 // Draw a lines of character/attribute pairs on the screen.
-void	ScreenClass::line (int x,int y,unsigned *pairs,int numpairs,
+void	ScreenClass::line (int x,int y,unsigned far *pairs,int numpairs,
 		 	   int dialog)
 {
   unsigned far *screen;
@@ -279,6 +295,7 @@ void	ScreenClass::jumpdos (char *cmdline)
   saveshape = regs.x.cx;
   textattr (oldattr);
   HideMouse ();
+  textmode (origmode);		// Go to original mode on a shell-out.
   clrscr ();
   gotoxy (1,1);
   shape (CURS_UNDERLINE);
@@ -291,7 +308,9 @@ void	ScreenClass::jumpdos (char *cmdline)
       cprintf ("Type EXIT at the DOS prompt to return to UW/PC.\r\n");
       system ("");
     }
-  textmode (mode);
+  textmode (mode);		// Restore the text mode.
+  if (flags & FLAG_LARGE)
+    textmode (C4350);		// Restore 43/50 line mode if required.
   if (UWConfig.EnableMouse)
     UWConfig.EnableMouse = InitMouse (); // Enable the mouse again.
   cursor (savex,savey);

@@ -1,4 +1,4 @@
-		       Termcap Compiler Version 1.02
+		       Termcap Compiler Version 1.04
 
 	             Copyright (C) 1991 Rhys Weatherley
 
@@ -10,16 +10,61 @@ abstract assembly code and compiles them into binary terminal descriptions that
 UW/PC can use to provide new types of terminal emulations.  The standard UW/PC
 terminal types are included as examples of the assembly code versions of the
 terminal descriptions in the files VT52.CAP, ADM31.CAP and ANSI.CAP in the
-source code archive UW-SRC.ZIP.
+source code archive UW-SRC.ZIP.  Note that ANSI.CAP implements both an ANSI
+emulation and a VT100 emulation.
+
+A new feature to version 1.03 and higher is the ability to convert a Unix
+TERMCAP or TERMINFO description of a terminal type into a .CAP file that can
+then be compiled by another call to TERMCC.  This was based on a discussion with
+Nelson Minar (nelson@reed.edu).  Thus, if you are having trouble getting
+your Unix host to work with the built-in terminal types, then you can download
+the relevant TERMCAP or TERMINFO entry and compile it into a .TRM file that
+will do exactly what the Unix host wants.  That's the idea at least. :-)
 
 2. USING THE TERMCAP COMPILER.
 
-The Termcap Compiler "TERMCC" accepts assembly code from the filename supplied
-as an argument and writes the resultant compiled terminal description to the
-supplied output file or a file with the same path and name as the input file,
-but with a ".TRM" extension.  The full command syntax is:
+There are two ways to use TERMCC.  The first compiles a .CAP file into a
+.TRM terminal description file, and the second converts a TERMCAP or TERMINFO
+entry into a .CAP file for later editing and compilation.
 
-	TERMCC infile[.CAP] [outfile[.TRM]]
+In the former case, the Termcap Compiler "TERMCC" accepts assembly code from
+the filename supplied as an argument and writes the resultant compiled
+terminal description to the supplied output file or a file with the same
+path and name as the input file, but with a ".TRM" extension.  The full
+command syntax is:
+
+	TERMCC [-t termtype] infile[.CAP] [outfile[.TRM]]
+
+The "-t" option is used for conditional compilation of terminal types that
+use the "names" instruction instead of the "name" instruction.  See the
+discussion of these instructions below for more details.
+
+In the second case, TERMCC takes three or four arguments, the first of which
+must be "-c" or "-C".  It scans the file "tcapfile" for the terminal type
+"termtype" and converts it into a TERMCC terminal description in the .CAP
+file.  If the fourth argument is not given, then the file "termtype.CAP"
+is used by default.
+
+	TERMCC -c termtype tcapfile [capfile[.CAP]]
+
+The "tcapfile" can be obtained from a number of sources.  The best bet is
+the "/etc/termcap" file on your Unix system.  If your system uses TERMINFO
+instead of TERMCAP, then the output of the "infocmp" (or "/usr/5bin/infocmp")
+command can be used.  To produce the required output from "infocmp", do
+one of the following at your Unix prompt:
+
+	infocmp -I termtype >tempfile
+
+    or	infocmp -L termtype >tempfile
+
+where "termtype" the terminal type you wish to convert, and "tempfile" is
+the name of a temporary file to place the TERMINFO entry into.  You should
+download the contents of this file and pass it to TERMCC as the "tcapfile"
+parameter.  If you wish to download more than one terminal type, using this
+method, then you can specify more than one terminal type on "infocmp"'s
+command line.  TERMCC will scan the contents of the file "tcapfile" for
+the terminal type to be converted.  See the section "CONVERTING TERMINAL
+TYPES" below for more information.
 
 3. USING NEW TERMINAL DESCRIPTIONS WITH UW/PC.
 
@@ -126,14 +171,35 @@ instructions that can be used to create terminal descriptions.
 
 The source file can contain comments that begin with "//" and continue to the
 end of the line (like in C++), and it must begin with a "name" instruction,
-although this is not checked by the compiler.  There is no fixed format for
-the instructions except that labels cannot occur between an instruction's
-name and its arguments.  Other than that, an instruction can appear in any
-way with any amount of white space and comments surrounding its name and
-arguments, and any number of instructions and labels can appear on the one
-line or wrapped across lines.  Despite this, it is better to only place one
-instruction on each line with an optional label preceding it, as shown in the
-example terminal descriptions.
+although this is not checked by the compiler.  Following the "name"
+instruction, an optional "type" instruction may follow.  This declares the
+number for the terminal type required by Protocol 2.  e.g.
+
+		type	1
+		type	uwtadm31
+
+The single argument may be a number or one of the pre-defined constants
+"uwtadm31", "uwtvt52", "uwtansi", "uwttek4010", "uwtftp", "uwtprint", "uwtplot"
+and "uwtunknown".  These constants correspond to the values 0..6 and 127.  At
+present, if the terminal type is specified as unknown (the default if no
+"type" instruction is present), then UW/PC will default to using ADM31.
+A second form of the "type" instruction may be used in terminal types that are
+conditionally compiled with a "names" instruction:
+
+		type	value	if	string
+
+The meaning of this instruction is to use the given terminal type value if
+the terminal type's name matches the given string.  e.g.
+
+		type	uwtansi	if	"ANSI"
+
+There is no fixed format for the instructions except that labels cannot
+occur between an instruction's name and its arguments.  Other than that,
+an instruction can appear in any way with any amount of white space and
+comments surrounding its name and arguments, and any number of
+instructions and labels can appear on the one line or wrapped across lines.
+Despite this, it is better to only place one instruction on each line with
+an optional label preceding it, as shown in the example terminal descriptions.
 
 Labels consist of an alphanumeric identifier (that must not be an instruction
 name) and a colon.  The two labels "start" and "keys" must be present in the
@@ -152,6 +218,14 @@ windows of that terminal type.
 
 	add	- Adds the instruction's argument to the accumulator.
 		  The argument can be numeric, "width" or "height".
+
+	addtitle - Add the accumulator to the window's title.  This is for use
+		  in escape sequences for setting titles.  See also "clrtitle"
+		  and "showtitle".  The title is not displayed until a
+		  "showtitle" instruction is executed.
+
+	align	- Perform an alignment test by filling the screen with the
+		  character in the accumulator.
 
 	bell	- Ring the terminal bell.
 
@@ -176,13 +250,32 @@ windows of that terminal type.
 	clreos	- Clear to the end of the screen from the current cursor
 		  position in the current scrolling attribute.
 
+	clrmap	- Clear the character mapping table.  This is used to return
+		  from an alternative character set or before creating a
+		  new mapping of characters with the "map" instruction.  If
+		  any foreign language mappings were in force before any
+		  "map" instructions, then this instruction will restore them.
+
+	clrrgn	- Clear the current scrolling region and reset it to the full
+		  screen size.  A new scrolling region may be set with the
+		  "region" instruction.
+
 	clrsol	- Clear to the start of the current line in the current
 		  scrolling attribute.  The current cursor position is
-		  not cleared.
+		  also cleared.
 
 	clrsos	- Clear to the start of the screen from the current
 		  cursor position in the current scrolling attribute.
-		  The current cursor position is not cleared.
+		  The current cursor position is also cleared.
+
+	clrtabs	- Clear all tabstops.
+
+	clrtitle - Clear the window's title.  The title is not displayed until
+		  a "showtitle" instruction is executed.
+
+	copyattr - Copy the current printing attribute into the current
+		  scrolling attribute.  This is for use on terminals that
+		  change both attributes at the same time.
 
 	cmp	- Compares the instruction's argument to the accumulator.
 		  The argument can be numeric, "width" or "height".  The
@@ -193,6 +286,9 @@ windows of that terminal type.
 
 	dec	- Decrement the number of arguments and compare it with zero,
 		  putting the result of the comparison into the comparator.
+
+	deftabs - Clear all tab stops and set default tab stops every 8
+		  screen positions.
 
 	delchar	- Delete the character at the current screen position,
 		  moving all following characters left one place and
@@ -215,7 +311,9 @@ windows of that terminal type.
 	geta	- Gets an argument from the argument array.  This instruction's
 		  first argument (1..8) specifies the argument to get and its
 		  second argument specifies an 8-bit default value to use if
-		  the argument in the argument array is not set.
+		  the argument in the argument array is not set.  The second
+		  argument can also be either "width" or "height" for the
+		  screen dimensions.
 
 	getarg	- Gets an argument from the remote host.  It is assumed to
 		  be the ASCII representation of a number.  The number will
@@ -226,6 +324,37 @@ windows of that terminal type.
 	getch	- This instruction will wait until the next character is
 		  received from the remote host, which it will place into
 		  the accumulator, and then it will continue execution.
+
+	getchg	- Same as "getch", except that if a character with a code >= 32
+		  is received, then a "send" instruction is implicitly
+		  executed, and control returns to the "getchg" instruction
+		  again.  This behaviour gives faster character turnaround
+		  on graphic characters.  If the code is less than 32, then
+		  control passes to the next instruction after the "getchg".
+
+	getchg52 - Same as "getchg" except that "send52" is executed for
+		  graphic characters.
+
+	getchgi	- Same as "getchg", except that the single argument specifies
+		  a bit in the flags register to be tested.  If the bit is
+		  non-zero, then an "inschar" instruction is executed instead
+		  of the usual "send".  The bit is intended to be set whenever
+		  the terminal is in "insert mode".
+
+	getchgi52 - Same as "getchgi", but uses "send52" instead of "send".
+
+	getchgs	- Same as "getchg", except that the single argument specifies
+		  a bit in the flags register to be tested.  If the bit is
+		  non-zero, then a "send52" instruction is done, instead of
+		  the default "send".  This is intended for terminal emulations
+		  that can change their end of line character behaviour, or
+		  which emulate more than one similar terminal type, with
+		  different end of line behaviours.
+
+	getchgsi - Same as "getchgs", except that there are two arguments.  The
+		  first is the bit for "send/send52" as described above for
+		  "getchgs", and the second is the bit for the insertion mode,
+		  as described above fore "getchgi".
 
 	getx	- Get the value of the X register and place it into the
 		  accumulator.
@@ -272,6 +401,10 @@ windows of that terminal type.
 
 	jmp	- Jump unconditionally to the label given as an argument.
 
+	jmpkeys	- This is for use in a key translation table only.  It's
+		  argument specifies a label to jump to if a key hasn't
+		  been matched when this instruction has been reached.
+
 	jsr	- Jump to a subroutine at the label given as an argument.
 		  Subroutines can only be nested up to 10 levels deep.  If
 		  you go any deeper, it is not checked (for speed) and
@@ -304,15 +437,102 @@ windows of that terminal type.
 		  in the same column.  At the bottom of the screen, the
 		  screen is scrolled up one line.
 
+	map	- Changes the printable mapping of an output character.
+		  This instruction takes two arguments, separated by a comma:
+		  the original character and the new character to map to. e.g.
+
+		  	map	'j',217
+			map	'k',191
+			map	'l',218
+			map	'm',192
+
+		  This instruction is normally used to construct alternative
+		  character sets in some emulations, notably VT100.  The
+		  "clrmap" instruction will return to the default mappings.
+
 	move	- Move the cursor to the position denoted by the X and Y
 		  registers.  The screen origin is at (0,0).  If the
 		  position is off-screen, the cursor is not moved.
+
+	moved	- Move down the number of lines specified in the accumulator.
+		  Does not scroll when the bottom of the screen is reached.
+
+	moveh	- Move the cursor to the home position (0,0).
+
+	movel	- Move left the number of positions specified in the
+		  accumulator.  Does not wrap to previous lines.
+
+	mover	- Move right the number of positions specified in the
+		  accumulator.  Does not wrap to the next line.
+
+	moverel	- Move the cursor relative to its current position by the
+		  amount specified by the X and Y registers.  If the
+		  destination is off-screen, then it will stop at the
+		  screen boundary.
+
+	moveu	- Move up the number of lines specified in the accumulator.
+		  Does not scroll when the top of the screen is reached.
 
 	name	- Takes a string argument that specifies the name of the
 		  terminal emulation.  This must be the first instruction
 		  in the terminal description, but this is not checked.
 
+	namech	- Takes a single numeric argument which indicates the character
+		  from the terminal type's name to be extracted.  e.g. if
+		  the .CAP file began with the following instruction:
+
+			name	"ANSI"
+
+		  and "namech 0" was executed, then 'A' will be loaded into
+		  the accumulator.  Note that this instruction is optimised
+		  into a "load" instruction at compile-time, so indexing off
+		  the end of a terminal type name will produce whatever
+		  garbage was around in the TERMCC compiler, rather than in
+		  the terminal description.  Usually it is just necessary to
+		  get the first or second characters to determine which
+		  terminal type is active when a "names" instruction has been
+		  supplied for conditional compilation.
+
+	names	- A more generalised form of the "name" instruction.  It
+		  takes a comma-separated list of terminal names and
+		  labels, enclosed in square brackets.  If a "-t" option
+		  was supplied on the TERMCC command-line, then the name
+		  that was supplied will be the one chosen from the list
+		  of names.  In this way it is possible to use the one
+		  .CAP file to generate descriptions for more that one
+		  terminal type.  The labels point to the start of the
+		  default key translation table for that terminal type. e.g.
+
+		  	names	[["ANSI",keys],["VT100",vt100keys]]
+
+		  Thus, the instruction "name str" is functionally equivalent
+		  to the extended instruction "names [[str,keys]]".  The
+		  "namech" instruction may be used to help determine which
+		  terminal type is in use at run-time.  For example, if
+		  "-t vt100" was supplied on the TERMCC command-line, and
+		  the instruction "namech 0" was executed, then the
+		  accumulator would get the value 'V'.  If however, that
+		  command-line option was not present (or was "-t ansi"),
+		  then the accumulator would get the value 'A'.  This value
+		  can be subsequently tested to determine what emulation
+		  is currently active.
+
+	region	- Set the scrolling region to start at the value in the X
+		  register and end at the value in the Y register.  The
+		  cursor is not moved, and printing outside the region will
+		  produce mixed results (since Unix programs I know of
+		  do print outside the region, there shouldn't be anything
+		  to worry about).  If Y is less than X then a single-line
+		  region at X is set.  If either value is off-screen, then
+		  it will be truncated to the screen boundaries.
+
+	remnum	- Send the value in the accumulator as a 1-3 digit decimal
+		  value to the remote host.
+
 	remote	- Send the value in the accumulator to the remote host.
+
+	remstr	- Takes a single string argument and sends that string to
+		  the remote host.
 
 	restattr - Restore the current printing attribute that was saved
 		  by using "saveattr".
@@ -324,6 +544,8 @@ windows of that terminal type.
 
 	reset	- Takes a numeric argument which is a number between 0 and
 		  15 that indicates a bit in the flags register to be reset.
+
+	restab	- Reset any tabstop at the current screen x position.
 
 	restxy	- Restore the current cursor position from the saved X and
 		  Y registers.  The values may be saved by the "savexy"
@@ -378,10 +600,14 @@ windows of that terminal type.
 			3 - Normal attribute on the status line.
 			4 - Highlighting attribute for the status line.
 
-	setscrl	- Set the current scrolling attribute.  If a numeric
-		  argument is supplied then the attribute is set from
-		  the global attribute table (see above).  Otherwise,
-		  the current accumulator value is used as the attribute.
+	setbold	- Set the bold bit on in the current printing attribute.
+
+	setboldoff - Turn off the bold bit in the current printing attribute.
+
+	setblink - Set the blinking bit on in the current printing attribute.
+
+	setblinkoff - Turn off the blinking bit in the current printing
+		  attribute.
 
 	setc	- Set the number of arguments directly from the accumulator.
 		  This is useful to use the number of arguments register as
@@ -389,6 +615,13 @@ windows of that terminal type.
 		  through a loop.  The argument array is not modified, and
 		  "geta" and "shift" can still be used to step through the
 		  array to get the arguments.
+
+	setscrl	- Set the current scrolling attribute.  If a numeric
+		  argument is supplied then the attribute is set from
+		  the global attribute table (see above).  Otherwise,
+		  the current accumulator value is used as the attribute.
+
+	settab	- Place a tabstop at the current screen x position.
 
 	setx	- Places the value of the accumulator in the X register.
 
@@ -400,6 +633,9 @@ windows of that terminal type.
 		  instruction will get the argument following the first.
 		  The "resarr" instruction will move everything back to the
 		  start of the argument array.
+
+	showtitle - Display the window's title, as set by "clrtitle" and
+		  "addtitle".
 
 	sub	- Subtracts the instruction's argument from the accumulator.
 		  The argument can be numeric, "width" or "height".
@@ -422,7 +658,18 @@ windows of that terminal type.
 		  against the accumulator in turn, and will jump to the
 		  associated label of the first matching value.  If no
 		  values match, then execution will continue after the
-		  "endsw" instruction.
+		  "endsw" instruction.  A special comparison that can be
+		  used in a "switch" instruction is the "digit test". e.g.
+
+		  	switch
+			  'A',aproc
+			  'B',bproc
+			  digit,digproc
+			  'Z',zproc
+			endsw
+
+		  The "digit" case will match any of the decimal digits
+		  '0' through '9'.
 
 	tab	- Move the cursor to the next tabstop.  Tabstops are
 		  placed every 8 characters, and the cursor will wrap to
@@ -438,6 +685,23 @@ windows of that terminal type.
 		  is set, and zero if it is reset.  The comparator can then
 		  be tested with "je" (for reset) and "jne" (for set).
 
+	type	- Set the Protocol 2 terminal type, as described above.
+
 You should look at the standard VT52, ADM31 and ANSI terminal types that come
 with the UW/PC source code for more information on how to write terminal
 descriptions.  Please report any bugs or enhancements to the author.
+
+6. CONVERTING TERMINAL TYPES.
+
+7. FUTURE WORK.
+
+The terminal type conversion is nowhere near complete as yet.  There are still
+many sequences that aren't understood, either because I haven't implemented
+the TERMCC instructions for them yet, or because the IBM-PC does not have the
+ability to support those sequences.  Any such sequences are reported as
+warnings when TERMCC is run, so if there are some sequences that you
+desperately need and TERMCC is unable to convert them, then please let me
+know what they are, and what they are supposed to do.  If you wish, you can
+send me the contents of your Unix system's /etc/termcap file, or selected
+TERMINFO entries.  This will allow me to build up a library of terminal
+types and be able to fine-tune the conversion process in future.

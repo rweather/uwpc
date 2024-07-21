@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+# uwmore - A script to start the user's PAGER on some files in a new UW window.
+#
+# Usage: uwmore [-n] [-ttitle] [-wtermtype] [-blines] [file ...]
+#
+
+# Fetch the title (so any spaces don't get lost).
+case $1 in
+  -t*) UWTITLE="$1"
+       shift;;
+    *) UWTITLE=;;
+esac
+
+# Set the pager to more if a default not specified.
+if [ -z "$PAGER" ]; then
+  PAGER=more
+fi
+
+# Now execute uwcmd to start up the pager.
+exec uwcmd -c"$PAGER" -h "$UWTITLE" $*

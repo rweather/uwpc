@@ -49,7 +49,12 @@ public:
 	UWCutToClipboard (UWDisplay *wind,int mouse=0,int x=0,int y=0);
 	~UWCutToClipboard (void);
 
-	virtual	char far *name	() { return ((char far *)" CUT"); };
+	virtual	char far *name	()
+		  { if (usemouse)
+		      return ((char far *)"MCUT");
+		     else
+		      return ((char far *)" CUT");
+		  };
 	virtual	void	key	(int keypress);
 	virtual	void	remote	(int ch);
 	virtual	void	mouse	(int x,int y,int buttons);

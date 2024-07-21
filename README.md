@@ -31,6 +31,10 @@ The Linux "screen" utility provides similar functionality these days,
 but the Unix Windows protocol was fairly unique in the late 1980's and
 early 1990's.
 
+The UW/PC project started in December 1990 and continued until mid-1992
+when I got distracted by other things, namely my "Helldiver" e-mail and
+USENET reader.  And then I got a real job and that was that.
+
 See [UW.TXT](UW.TXT) for the historical documentation.
 
 Screenshots
@@ -56,12 +60,20 @@ The source code for the Unix Windows server from John Bruner is in the
 
 I have cleaned up the code and checked in the source code for all
 MS-DOS versions.  Branches in the repository called "uwpc-x.xx" are
-provided for each major release I was able to recover from my archives.
+provided for each major version I was able to recover from my archives:
 
-I am currently missing the source code for versions 1.00 and 1.05,
-but everything else is available.  The final version 2.03 included a
-Windows 3.0 port but it is in an unfinished state.  I haven't checked
-2.03 in yet.
+* 1.00 (no source code found, only executables)
+* 1.01
+* 1.02
+* 1.03
+* 1.04
+* 1.05 (not found)
+* 2.00 (total rewrite in C++)
+* 2.01
+* 2.02 (started the Windows 3.0 port)
+* 2.03 (final version, work in progress)
+
+The Windows front end is not yet checked in, only the MS-DOS front end.
 
 The original MS-DOS code was designed to be built with Turbo C++ and
 Turbo Assembler.  I switched to Borland C++ for the later Windows version.
@@ -75,6 +87,19 @@ BSD 4.3 systems and is written in K&R C.  It would need a lot of work to
 build it for modern ANSI C and POSIX compatible systems.
 
 See the [HISTORY.TXT](HISTORY.TXT) file for release notes on each version.
+
+TERMCC
+------
+
+By the time the project finished, I had support for a number of terminal
+types in the "adm" and "vt" series.
+
+Due to the complexity of implementing the escape sequence state machines,
+I invented a little interpreted language.  The ".CAP" files were converted
+into bytecode ".TRM" files which were then built into the executable.
+
+The "Termcap Compiler", or "TERMCC", takes care of the conversion,
+with the parser implemented using flex and bison.
 
 Executables
 -----------

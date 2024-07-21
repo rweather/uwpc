@@ -1,0 +1,7 @@
+#!/bin/sh
+# uwtype - request a "TERM=" or "setenv TERM" command to be sent from UW/PC.
+ECHO=/bin/echo
+case `basename "$SHELL"` in
+  csh|-csh|tcsh|-tcsh)	$ECHO -n '|u' ;;
+  *)			$ECHO -n '|t' ;;
+esac

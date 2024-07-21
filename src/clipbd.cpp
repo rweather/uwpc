@@ -42,8 +42,7 @@
 //
 // Define the global data for the clipboard.
 //
-#define	CLIPBOARD_SIZE	(81 * 24)
-static	char	Clipboard[CLIPBOARD_SIZE];
+static	char far *Clipboard=0;	// Pointer to the clipboard memory.
 static	int	ClipLength=0;	// Length of the clipboard.
 static	int	ClipActive=0;	// Non-zero for an active clipboard.
 static	int	ClipPosn;	// Current paste position.
@@ -51,8 +50,14 @@ static	int	ClipPosn;	// Current paste position.
 UWCutToClipboard::UWCutToClipboard (UWDisplay *wind,int mouse,int x,int y) :
 	UWClient (wind)
 {
-  UWMaster.install (this);	// Install this client in the client stack.
   usemouse = mouse;		// Save the mouse usage flag for later.
+  UWMaster.install (this);	// Install this client in the client stack.
+  if (x < 0) x = 0;		// Ensure that the boundaries are preserved.
+  if (y < 0) y = 0;		// This is mainly for the Windows 3.0 version.
+  if (x >= (window -> width))
+    x = (window -> width) - 1;
+  if (y >= (window -> height))
+    y = (window -> height) - 1;
   if (usemouse)
     {
       x1 = x;				// Start at current mouse position.
@@ -92,6 +97,21 @@ void	UWCutToClipboard::key (int keypress)
 		 else
 		  {
 		    // Copy the screen data to the clipboard and exit //
+		    int wid,ht;
+		    wid = x2 - x1 + 1;
+		    ht = y2 - y1 + 1;
+		    if (wid < 0) wid = -wid;
+		    ++wid;	// Allow for '\r' on end of each line.
+		    if (ht < 0) ht = -ht;
+		    if (Clipboard)
+		      UWFree (Clipboard);
+		    if (!(Clipboard = (char far *)UWAlloc (wid * ht)))
+		      {
+		        // Not enough memory - just abort //
+		        window -> bell ();
+		        UWMaster.remove ();
+			break;
+		      } /* if */
 		    ClipLength = window -> copycut (x1,y1,x2,y2,Clipboard);
 		    window -> markcut (x1,y1,x2,y2);
 		    corner = -1;
@@ -113,6 +133,14 @@ void	UWCutToClipboard::key (int keypress)
       case CURSOR_RIGHT:
       		if (x2 < (window -> width - 1))
 		  changex = 1;
+		break;
+      case CURSOR_HOME: case '0': case '^':
+      		if (x2 > 0)
+		  changex = -x2;
+		break;
+      case CURSOR_END: case '$':
+      		if (x2 < (window -> width - 1))
+		  changex = (window -> width - 1) - x2;
 		break;
       default:	defkey (keypress);
       		break;
@@ -168,6 +196,12 @@ void	UWCutToClipboard::mouse (int x,int y,int buttons)
   if (buttons & MOUSE_LEFT)
     {
       // Move the bottom right corner to the mouse position */
+      if (x < 0)
+        x = 0;
+      if (y < 0)
+        y = 0;
+      if (x >= window -> width)
+        x = (window -> width) - 1;
       if (y >= window -> height)
 	y = (window -> height) - 1;
       window -> markcut (x1,y1,x2,y2);
@@ -178,6 +212,20 @@ void	UWCutToClipboard::mouse (int x,int y,int buttons)
    else
     {
       // Copy the screen data to the clipboard and exit //
+      int wid,ht;
+      wid = x2 - x1 + 1;
+      ht = y2 - y1 + 1;
+      if (wid < 0) wid = -wid;
+      if (ht < 0) ht = -ht;
+      if (Clipboard)
+        UWFree (Clipboard);
+      if (!(Clipboard = (char far *)UWAlloc (wid * ht)))
+        {
+          // Not enough memory - just abort //
+          window -> bell ();
+          UWMaster.remove ();
+	  return;
+        } /* if */
       ClipLength = window -> copycut (x1,y1,x2,y2,Clipboard);
       window -> markcut (x1,y1,x2,y2);
       corner = -1;
@@ -189,7 +237,7 @@ UWPasteFromClipboard::UWPasteFromClipboard (UWDisplay *wind)
 	: UWClient (wind)
 {
   UWMaster.install (this);
-  if (ClipActive)
+  if (ClipActive || !Clipboard)
     UWMaster.remove ();
    else
     {

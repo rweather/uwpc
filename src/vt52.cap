@@ -3,7 +3,7 @@
 // VT52.CAP - Capability file for the VT52 terminal type.
 // 
 //  This file is part of UW/PC - a multi-window comms package for the PC.
-//  Copyright (C) 1990-1991  Rhys Weatherley
+//  Copyright (C) 1990-1992  Rhys Weatherley
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -27,14 +27,18 @@
 //    1.0    23/03/91  RW  Original Version of VT52.CAP
 //    1.1    24/05/91  RW  Add some other "vt5/6" series codes.
 //    1.2    25/07/91  RW  Add support for client escapes.
+//    1.3    15/03/92  RW  Hack about a bit to make it more efficient.
 //
 //-------------------------------------------------------------------------
 
 		name	"VT52"		// Name of the terminal type.
+		type	uwtvt52		// Protocol 2 terminal type.
 
-start:		getch			// Get next character from remote.
+start:		clrrgn			// Clear the scrolling region.
+		deftabs			// Set the default tab stops.
+stloop:		getchg52		// Get character and send if >= 32.
 		switch			// Determine top-level action.
-		  0x00,start		// Ignore NUL characters
+		  0x00,stloop		// Ignore NUL characters
 		  '\r',crproc
 		  '\n',lfproc
 		  '\b',bsproc
@@ -43,24 +47,24 @@ start:		getch			// Get next character from remote.
 		  0x1B,escproc
 		endsw
 		send52			// Send the character direct.
-		jmp	start		// Back around for another character.
+		jmp	stloop		// Back around for another character.
 
 crproc:		cr
-		jmp	start
+		jmp	stloop
 lfproc:		lf
-		jmp	start
+		jmp	stloop
 bsproc:		bs
-		jmp	start
-tabproc:	tab
-		jmp	start
+		jmp	stloop
+tabproc:	tabnd
+		jmp	stloop
 bellproc:	bell
-		jmp	start
+		jmp	stloop
 escproc:	getch			// Get the escape character.
 		switch			// Determine escape action.
 		  '7',savepos
 		  '8',restpos
 		  'A',upline
-		  'B',lfproc
+		  'B',dnline
 		  'C',rightch
 		  'D',bsproc
 		  'H',home
@@ -68,6 +72,7 @@ escproc:	getch			// Get the escape character.
 		  'J',eraseos
 		  'K',eraseol
 		  'Y',movecurs
+		  'Z',ident
 // The following escape codes are not guaranteed to be part of
 // the "VT52" standard, but provide a good selection of facilities
 // from the whole "vt5/6" range of terminals.  The terminals that do
@@ -82,49 +87,37 @@ escproc:	getch			// Get the escape character.
 		  'S',standout		// h1552-rv (reverse video)
 		  'T',normal		// h1552-rv
 		  '|',doclient		// UW/PC client escape.
+		  ']',titles		// Simulate VT100 title setting cmds.
 		endsw
-		jmp	start		// Ignore the escape code.
+		jmp	stloop		// Ignore the escape code.
 //
 // The following code is for the escape actions on output sequences.
 //
 savepos:	savexy
-		jmp	start
+		jmp	stloop
 restpos:	restxy
-		jmp	start
+		jmp	stloop
 doclient:	getch			// Get the client operation character.
 		client
-		jmp	start
-upline:		getxy			// Get current cursor position.
-		gety			// Need to change Y co-ordinate.
-		cmp	0
-		je	start		// Ignore if at screen top.
-		sub	1
-		sety			// Set a new Y co-ordinate.
-		move
-		jmp	start
-rightch:	getxy			// Get current cursor position.
-		getx			// Need to change X co-ordinate.
-		add	1
-		cmp	width		// Check if over right screen side.
-		jb	rightok
-		cr			// Need to return to the start
-		lf			// of the next screen line.
-		jmp	start
-rightok:	setx
-		move			// Move to the new position.
-		jmp	start
+		jmp	stloop
+upline:		load	1
+		moveu
+		jmp	stloop
+dnline:		load	1
+		moved
+		jmp	stloop
+rightch:	load	1
+		mover
+		jmp	stloop
 clrscrn:	clear			// Clear the entire screen.
-home:		load	0		// Move to screen position (0,0).
-		setx
-		sety
-		move
-		jmp	start
-scrolldn:	scrldn			// Scroll screen down one line.
-		jmp	start
+home:		moveh
+		jmp	stloop
+scrolldn:	revlf			// Scroll screen down one line.
+		jmp	stloop
 eraseos:	clreos			// Clear to the screen's end.
-		jmp	start
+		jmp	stloop
 eraseol:	clreol			// Clear to the line's end.
-		jmp	start
+		jmp	stloop
 movecurs:	getch			// Get the Y co-ordinate.
 		sub	' '
 		sety
@@ -132,21 +125,49 @@ movecurs:	getch			// Get the Y co-ordinate.
 		sub	' '
 		setx
 		move
-		jmp	start
+		jmp	stloop
 extras:		getch			// Get VT61 extra code for ESC-P.
 		switch
 		  'f',insertln		// vt61
 		  'd',deleteln		// vt61
 		endsw
-		jmp	start
+		jmp	stloop
 insertln:	insline
-		jmp	start
+		jmp	stloop
 deleteln:	delline
-		jmp	start
+		jmp	stloop
 normal:		setattr	0
-		jmp	start
+		jmp	stloop
 standout:	setattr	1
-		jmp	start
+		jmp	stloop
+ident:		remstr	"\033/Z"	// Identify ourselves as a VT52.
+		jmp	stloop
+titles:		getch			// Check for ESC ] l/1/2.
+		cmp	'l'
+		je	titlevt
+		cmp	'1'
+		je	titlext
+		cmp	'2'
+		jne	stloop
+titlext:	getch			// Check for ESC ] 1/2 ;
+		cmp	';'
+		jne	stloop
+titlevt:	clrtitle		// Clear title and start fetching it.
+titleloop:	getch
+		cmp	7
+		je	endtitle	// BEL terminates xterm title cmds.
+		cmp	0x1B
+		je	esctitle	// ESC \ terminates vt100 title cmds.
+		cmp	' '		// Make sure the char is in range.
+		jb	titleloop
+		cmp	0x7F
+		jae	titleloop
+		addtitle		// Add the character to the title.
+		jmp	titleloop
+esctitle:	getch			// Eat next character and stop.
+endtitle:	showtitle		// Show the title that was read in.
+		jmp	stloop
+
 //
 // Define the keyboard translations to be performed.
 //

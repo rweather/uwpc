@@ -1,0 +1,17 @@
+#!/bin/sh
+#
+# uwclock - A script to create a UW window containing a clock.
+#
+# Usage: uwclock [-ttitle] [-n] [-wtermtype] [-blines] [dateopts]
+#
+#	dateopts  Options to pass to the date(1) command.
+#
+
+# Fetch the title (so any spaces don't get lost).
+case $1 in
+  -t*) UWTITLE="$1"
+       shift;;
+    *) UWTITLE=;;
+esac
+
+exec uwcmd -cuwclockd -0 "$UWTITLE" $*

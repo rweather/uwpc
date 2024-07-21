@@ -4,7 +4,7 @@
 //		  terminal descriptions.
 // 
 //  This file is part of UW/PC - a multi-window comms package for the PC.
-//  Copyright (C) 1990-1991  Rhys Weatherley
+//  Copyright (C) 1990-1992  Rhys Weatherley
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -30,6 +30,7 @@
 //    1.2    08/12/91  RW  Add international language support.
 //    1.3    10/12/91  RW  Add support for secondary key tables
 //			   and extra stuff for VT100.
+//    1.4    15/03/92  RW  Enhance TERMCC with lots of new instructions.
 //
 //-------------------------------------------------------------------------
 
@@ -40,6 +41,12 @@
 #include "config.h"		// Configuration handling routines
 #include "uw.h"			// UW protocol declarations
 #include <ctype.h>		// Character typing macros
+#include <mem.h>		// Memory handling functions
+
+// Define a mapping from ANSI colour codes to IBM-PC colour codes.
+static	unsigned char forecols[] = {0x00,0x04,0x02,0x06,0x01,0x05,0x03,0x07};
+static	unsigned char britecols[]= {0x00,0x0C,0x0A,0x0E,0x09,0x0D,0x0B,0x0F};
+static	unsigned char backcols[] = {0x00,0x40,0x20,0x60,0x10,0x50,0x30,0x70};
 
 // Jump to the currently stored location.
 void	UWTermDesc::jump (void)
@@ -59,13 +66,77 @@ void	UWTermDesc::interpret (int ch)
   while ((opcode = description[PC++]) != OP_GETCH)
     switch (opcode)
       {
-	case OP_SEND:		window -> send (acc,0); break;
-	case OP_SEND52:		window -> send (acc,1); break;
+	case OP_SEND:		window -> send (mapchars[acc],0); break;
+	case OP_SEND52:		window -> send (mapchars[acc],1); break;
+	case OP_SENDG:		if (acc >= 32)
+				  {
+				    window -> send (mapchars[acc],0);
+				    PC -= 2;	// Go back to "getch".
+				  } /* if */
+				break;
+	case OP_SENDG52:	if (acc >= 32)
+				  {
+				    window -> send (mapchars[acc],1);
+				    PC -= 2;	// Go back to "getch".
+				  } /* if */
+				break;
+	case OP_SENDGI:		if (acc >= 32)
+				  {
+				    if (flags & (1 << description[PC]))
+				      window -> inschar (mapchars[acc]);
+				     else
+				      window -> send (mapchars[acc],0);
+				    PC -= 2;	// Go back to "getch".
+				  } /* then */
+				 else
+				  PC++;		// Skip flag bit spec.
+				break;
+	case OP_SENDGI52:	if (acc >= 32)
+				  {
+				    if (flags & (1 << description[PC]))
+				      window -> inschar (mapchars[acc]);
+				     else
+				      window -> send (mapchars[acc],1);
+				    PC -= 2;	// Go back to "getch".
+				  } /* then */
+				 else
+				  PC++;		// Skip flag bit spec.
+				break;
+	case OP_SENDGS:		if (acc >= 32)
+				  {
+				    if (flags & (1 << description[PC]))
+				      window -> send (mapchars[acc],1);
+				     else
+				      window -> send (mapchars[acc],0);
+				    PC -= 2;	// Go back to "getch".
+				  } /* then */
+				 else
+				  PC++;		// Skip flag bit spec.
+				break;
+	case OP_SENDGSI:	if (acc >= 32)
+				  {
+				    if (flags & (1 << description[PC + 1]))
+				      window -> inschar (mapchars[acc]);
+				     else if (flags & (1 << description[PC]))
+				      window -> send (mapchars[acc],1);
+				     else
+				      window -> send (mapchars[acc],0);
+				    PC -= 2;	// Go back to "getch".
+				  } /* then */
+				 else
+				  PC += 2;	// Skip flag bit specs.
+				break;
 	case OP_CR:		window -> cr (); break;
 	case OP_LF:		window -> lf (); break;
 	case OP_BS:		window -> bs (0); break;
 	case OP_BSWRAP:		window -> bs (1); break;
 	case OP_MOVE:		window -> move (regx,regy); break;
+	case OP_MOVED:		window -> moverel (0,acc); break;
+	case OP_MOVEH:		window -> move (0,0); break;
+	case OP_MOVEL:		window -> moverel (-acc,0); break;
+	case OP_MOVER:		window -> moverel (acc,0); break;
+	case OP_MOVEREL:	window -> moverel (regx,regy); break;
+	case OP_MOVEU:		window -> moverel (0,-acc); break;
 	case OP_CLEAR:		window -> clear (); break;
 	case OP_CLREOL:		window -> clear (CLR_END_LINE); break;
 	case OP_CLREOS:		window -> clear (CLR_END_SCREEN); break;
@@ -73,7 +144,7 @@ void	UWTermDesc::interpret (int ch)
 	case OP_CLRSOS:		window -> clear (CLR_ST_SCREEN); break;
 	case OP_INSLINE:	window -> insline (); break;
 	case OP_DELLINE:	window -> delline (); break;
-	case OP_INSCHAR:	window -> inschar (acc); break;
+	case OP_INSCHAR:	window -> inschar (mapchars[acc]); break;
 	case OP_DELCHAR:	window -> delchar (); break;
 #ifdef	UWPC_DOS
 	case OP_SETATTR:	window -> setattr
@@ -131,6 +202,13 @@ void	UWTermDesc::interpret (int ch)
 	case OP_SWITCH_WORD:	value = description[PC++] & 255;
 				value |= (description[PC++] & 255) << 8;
 				if (acc == value)
+				  jump ();
+				 else
+				  PC += 2;	// Skip jump address.
+				break;
+	case OP_SWITCH_DIGIT:	value = description[PC++] & 255;
+				value |= (description[PC++] & 255) << 8;
+				if (acc >= '0' && acc <= '9')
 				  jump ();
 				 else
 				  PC += 2;	// Skip jump address.
@@ -209,6 +287,16 @@ void	UWTermDesc::interpret (int ch)
 				  acc = description[PC + 1] & 255;
 				PC += 2;
 				break;
+	case OP_GETA_WIDTH:	acc = argarray[(description[PC++] & 255) +
+					base];
+				if (acc == -1)
+				  acc = window -> width;
+				break;
+	case OP_GETA_HEIGHT:	acc = argarray[(description[PC++] & 255) +
+					base];
+				if (acc == -1)
+				  acc = window -> height;
+				break;
 	case OP_DEC:		--index; compare = index; break;
 	case OP_SHIFT:		++base; break;
 	case OP_SETC:		index = acc; break;
@@ -224,9 +312,69 @@ void	UWTermDesc::interpret (int ch)
 	case OP_KEYTAB_NONE:	keytab = -1; break;
 	case OP_TABND:		window -> tab (0,8,1); break;
 	case OP_REVLF:		window -> revlf (); break;
+	case OP_CLRMAP:		clrmap (); break;
+	case OP_MAP:		changemap (description[PC] & 255,
+					   description[PC + 1] & 255);
+				PC += 2;
+				break;
+	case OP_CLRRGN:		window -> clrrgn (); break;
+	case OP_REGION:		window -> region (regx,regy); break;
+	case OP_REMSTR:		while ((value = description[PC++])
+					!= 0)
+				  send (value);
+				break;
+	case OP_REMNUM:		value = acc;
+				if (value >= 100)
+				  send (value / 100 + '0');
+				value %= 100;
+				if (value >= 10)
+				  send (value / 10 + '0');
+				send (value % 10 + '0');
+				break;
+	case OP_SETTAB:		window -> settab (); break;
+	case OP_RESTAB:		window -> restab (); break;
+	case OP_CLRTABS:	window -> clrtabs (); break;
+	case OP_DEFTABS:	window -> deftabs (); break;
+	case OP_SETFORE:	if (!UWConfig.AnsiBright)
+				  window -> setattr (
+				  	(window -> getattr () & 0xF0)
+					| forecols[acc & 7]);
+				 else
+				  window -> setattr (
+				  	(window -> getattr () & 0xF0)
+					| britecols[acc & 7]);
+				break;
+	case OP_SETBACK:	window -> setattr (window -> getattr () & 0x0F
+					| backcols[acc & 7]);
+				break;
+	case OP_COPYATTR:	window -> setscroll (window -> getattr ());
+				break;
+	case OP_SETBOLD:	window -> setattr (window -> getattr () | 8);
+				break;
+	case OP_SETBOLDOFF:	window -> setattr (window -> getattr () & ~8);
+				break;
+	case OP_SETBLINK:	window -> setattr (window -> getattr () | 128);
+				break;
+	case OP_SETBLINKOFF:	window -> setattr (window -> getattr () & 127);
+				break;
+	case OP_ADDTITLE:	window -> addtitle (acc); break;
+	case OP_CLRTITLE:	window -> clrtitle (); break;
+	case OP_SHOWTITLE:	window -> showtitle ();
+				UWMaster.status ();
+				break;
+	case OP_DIRECT:		UWMaster.direct (1); break;
+	case OP_NODIRECT:	UWMaster.direct (0); break;
+	case OP_ALIGN:		window -> aligntest (acc); break;
 	default:		break;
       } // switch //
 } // UWTermDesc::interpret //
+
+// Reset the character mapping table to the default.
+void	UWTermDesc::clrmap (void)
+{
+  // Copy the original language translation table //
+  memcpy (mapchars,UWConfig.PrintTransTable,256);
+} // UWTermDesc::clrmap //
 
 // Process any key mappings for this terminal type.
 void	UWTermDesc::key (int keypress)
@@ -237,15 +385,22 @@ void	UWTermDesc::key (int keypress)
       UWTerminal::key (keypress);	// Process keypress normally.
       return;
     }
-  posn = keys;				// Want to scan key mapping table.
+  if (keytab == -1)
+    posn = keys;			// Want to scan key mapping table.
+   else
+    posn = keytab;			// Use the other key table.
   while (1)
     {
       match = (description[posn] & 255) | ((description[posn + 1] & 255) << 8);
       posn += 2;
       if (!match || keypress == match)
         break;				// Found the key or no match at all.
-      posn += description[posn] & 255;	// Skip past the string to the next one
+      if (match == -1)			// Should we jump to a new table?
+        posn = (description[posn] & 255)|((description[posn + 1] & 255) << 8);
+       else
+        posn += description[posn] & 255;// Skip past the string to the next one
     }
+#ifdef	DOOBERY
   if (!match && keytab != -1)
     {
       // Try the secondary key table if it is present //
@@ -260,6 +415,7 @@ void	UWTermDesc::key (int keypress)
           posn += description[posn] & 255; // Skip past the current string.
         }
     }
+#endif
   if (match)
     {
       // Output the characters associated with the key mapping //
@@ -276,7 +432,6 @@ void	UWTermDesc::key (int keypress)
 // be called at any time while the client is active.
 void	UWTermDesc::remote (int ch)
 {
-  ch = UWConfig.PrintTransTable[ch];	// Do language translation.
   if (description == 0)
     {
       UWTerminal::remote (ch);		// Emulate a "really dumb" terminal.
@@ -302,7 +457,18 @@ void	UWTermDesc::setemul (unsigned char far *desc)
   version = ((*(desc + 4)) & 255) | (((*(desc + 5)) & 255) << 8);
   if (version < 0x100 || version > UW_TERM_VERSION)
     return;				// Illegal terminal description.
-  description = desc + TERM_HEADER_SIZE; // Skip past starting index value.
+  if (version >= UW_TERM_TYPECODE_VERS)
+    {
+      termtype = *(desc + 6);		// Extract the terminal type.
+      if (termtype == 127)		// Default to ADM31 if unknown for now.
+        termtype = 0;
+      description = desc + TERM_HEADER_SIZE; // Skip past starting index value.
+    } /* then */
+   else
+    {
+      termtype = 0;			// Default to ADM31 :-( .
+      description = desc + TERM_OLD_HEADER_SIZE;
+    } /* else */
   regx = 0;				// Start all registers at 0.
   regy = 0;
   flags = 0;
@@ -312,5 +478,6 @@ void	UWTermDesc::setemul (unsigned char far *desc)
   savey = 0;
   keytab = -1;
   saveattr = window -> getattr ();
+  clrmap ();
   interpret (0);			// Execute till first character get.
 } // UWTermDesc::setemul //

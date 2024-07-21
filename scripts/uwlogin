@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# uwlogin - Start up a window with an rlogin shell in it.
+#
+# Usage: uwlogin [-ttitle] [-n] [-wtermtype] [-blines] host [rlogin-arg ...]
+#
+
+# Fetch the title (so any spaces don't get lost).
+case $1 in
+  -t*) UWTITLE="$1"
+       shift;;
+    *) UWTITLE=;;
+esac
+
+exec uwcmd -crlogin "$UWTITLE" $*

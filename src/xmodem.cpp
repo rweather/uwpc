@@ -26,6 +26,7 @@
 //  -------  --------  --  --------------------------------------
 //    1.1    11/05/91  RW  Original Version of XMODEM.CPP
 //    1.2    08/12/91  RW  Windows 3.0 support and change "::name".
+//    1.3    17/03/92  RW  Fix block counter on status line.
 //
 //-------------------------------------------------------------------------
 
@@ -43,7 +44,7 @@
 //
 // Uncomment the following line to turn on debugging writes.
 //
-#define	XMOD_DEBUG	1
+// #define	XMOD_DEBUG	1
 
 //
 // Define the allowable states the file transfer can be in.
@@ -109,6 +110,7 @@ UWXYFileTransfer::UWXYFileTransfer (UWDisplay *wind,int type,int recv,
       state = RecvStates[kind];	// Get the initial state to be processed.
     }
   blocknum = 1;
+  numblocks = 0;
   UWMaster.install (this);	// Install the file transfer object.
   if (file == NULL)
     UWMaster.remove ();		// Remove object if initialisation failed.
@@ -403,6 +405,7 @@ void	UWXYFileTransfer::process (int ch)
 			  fputc (buffer[temp],file);
 			++blocknum;	// Move onto the next block number.
 			blocknum &= 255;
+			++numblocks;
 			UWMaster.status (); // Update the status line.
 		      }
 		    send (ACK);		// Acknowledge the block.
@@ -525,5 +528,5 @@ char	*UWXYFileTransfer::getstatus (void)
 
 int	UWXYFileTransfer::getstatarg (int digit)
 {
-  return (blocknum - 1);
+  return (numblocks & 0x7FFF);
 } // UWXYFileTransfer::getstatarg //

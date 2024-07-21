@@ -3,7 +3,7 @@
 // CONFIG.CPP - Configuration objects for UW/PC.
 // 
 //  This file is part of UW/PC - a multi-window comms package for the PC.
-//  Copyright (C) 1990-1991  Rhys Weatherley
+//  Copyright (C) 1990-1992  Rhys Weatherley
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@
 //    1.0    23/03/91  RW  Original Version of CONFIG.CPP
 //    1.1    30/10/91  RW  Modify to make it work with Windows 3.0
 //    1.2    08/12/91  RW  Add international language support.
+//    1.3    15/03/92  RW  More options and support for VT100 driver.
 //
 //-------------------------------------------------------------------------
 
@@ -39,6 +40,7 @@
 #include "client.h"		// Client manipulation classes.
 #include "opcodes.h"		// Opcodes for terminal emulations.
 #include "screen.h"		// Screen attributes defined here.
+#include "uwproto.h"		// UW protocol constants and terminal types.
 #include <stdio.h>		// Standard I/O routines.
 #include <string.h>		// String processing routines.
 #include <ctype.h>		// Character type macros.
@@ -103,13 +105,13 @@ UWConfiguration::UWConfiguration (void)
   int key;
   ComPort = 1;
   ComParams = BAUD_2400 | BITS_8 | PARITY_NONE | STOP_1;
-  ComCtsRts = 0;
+  ComCtsRts = 1;
   ComFossil = 0;
   StripHighBit = 0;
   DisableStatusLine = 0;
   P0TermType = 0;
   P1TermType = &ADM31_Driver;
-  strcpy (InitString,"ATZ^M~~~AT S7=45 S0=0 V1 X1^M~");
+  strcpy (InitString,"AT^M~ATZ^M~~~AT S7=45 S0=0 V1 X1^M~");
   strcpy (HangupString,"~~~+++~~~ATH0^M");
   CarrierInit = 1;
   XonXoffFlag = 1;
@@ -142,6 +144,26 @@ UWConfiguration::UWConfiguration (void)
       PrintTransTable[key] = key;
     } /* for */
   TransFile[0] = '\0';			// No translation table file yet.
+  NewTransFile = 0;
+  Language[0] = '\0';
+  BigVideo = 0;
+  BellFreq = 1200;
+  BellDur = 200;
+  AnsiBright = 0;
+  strcpy (DialPrefix,"AT^M~ATDT");
+  strcpy (DialSuffix,"^M");
+  for (key = 0;key < NUM_DIAL_STRINGS;++key)
+    {
+      DialNumber[key][0] = '\0';	// No dialing string here in directory.
+      DialParams[key] = -1;		// Don't override default settings.
+    } /* for */
+  ObeyTerm = OBEY_IGNORE;
+  MaxProtocol = 2;
+  MaxTitleLen = 30;
+  ShellKind = SHELL_NONE;
+  ShellString[0] = '\0';
+  ComEstBaud = -1;			// Default to "baud"'s value.
+  ComDirect = 0;
 } // UWConfigration::UWConfiguration //
 
 // Abort the configuration with an error.
@@ -350,20 +372,87 @@ unsigned char far *UWConfiguration::FindTerminal (char *type)
     return ((unsigned char far *)&VT52_Driver);
    else if (!stricmp (type,"ansi"))
     return ((unsigned char far *)&ANSI_Driver);
+   else if (!stricmp (type,"vt100"))
+    return ((unsigned char far *)&VT100_Driver);
    else
     return (NULL);
 } // UWConfiguration::FindTerminal //
+
+// Parse a dialing directory comms parameter spec.  Returns
+// -1 if the string was illegal (it also generates an error msg).
+int	UWConfiguration::parsecom (char *str)
+{
+  unsigned long baud=0;
+  int params=0;
+  int errors=0;
+  int temp;
+  static unsigned long baudrates[] = {110,150,300,600,1200,2400,
+      				      4800,9600,19200,38400,57600,115200};
+
+  // Extract and search for the baud rate //
+  while (*str && isspace (*str))
+    ++str;
+  while (*str && isdigit (*str))
+    baud = baud * 10 + (*str++ - '0');
+  temp = 0;
+  while (temp <= BAUD_115200 && baud != baudrates[temp])
+    ++temp;
+  if (temp <= BAUD_115200)
+    params |= temp;
+   else
+    errors = 1;
+
+  // Parse the rest of the parameters //
+  while (*str && isspace (*str))
+    ++str;
+  if (*str == 'n' || *str == 'N')
+    params |= PARITY_NONE;
+   else if (*str == 'e' || *str == 'E')
+    params |= PARITY_EVEN;
+   else if (*str == 'o' || *str == 'O')
+    params |= PARITY_ODD;
+   else
+    errors = 1;
+  if (*str)
+    ++str;
+  if (*str == '8')
+    params |= BITS_8;
+   else if (*str == '7')
+    params |= BITS_7;
+   else
+    errors = 1;
+  if (*str)
+    ++str;
+  if (*str == '1')
+    params |= STOP_1;
+   else if (*str == '2')
+    params |= STOP_2;
+   else
+    errors = 1;
+  if (*str)
+    ++str;
+  while (*str && isspace (*str))
+    ++str;
+  if (*str || errors)
+    {
+      illegal ("comms parameter specification");
+      return (-1);
+    } /* then */
+   else
+    return (params);
+} // UWConfiguration::parsecom //
 
 #define	CONFIG_NAME_LEN		20
 #define	TYPE_NUMBER		0
 #define TYPE_IDENT		1
 #define TYPE_STRING		2
+#define	TYPE_BOOL		3
 
 // Process a configuration line.
 void	UWConfiguration::processline (char *line)
 {
   int index,type;
-  unsigned number;
+  unsigned long number;
   static char ConfigName[CONFIG_NAME_LEN + 1];
   static char ConfigParam[STR_LEN];
   char *errmsg="Illegal configuration command format";
@@ -445,6 +534,21 @@ void	UWConfiguration::processline (char *line)
   if (*line != '\0' && *line != '#')	// Abort if not at line end.
     error (errmsg);
 
+  // Convert yes/no and on/off to the boolean type code //
+  if (type == TYPE_IDENT)
+    {
+      if (!stricmp (ConfigParam,"yes") || !stricmp (ConfigParam,"on"))
+        {
+	  type = TYPE_BOOL;
+	  number = 1;
+	}
+       else if (!stricmp (ConfigParam,"no") || !stricmp (ConfigParam,"off"))
+        {
+	  type = TYPE_BOOL;
+	  number = 0;
+	}
+    }
+
   // Determine the configuration option to the changed //
   if (!stricmp (ConfigName,"port") && type == TYPE_NUMBER)
     {
@@ -457,15 +561,21 @@ void	UWConfiguration::processline (char *line)
     {
       comports[ComPort - 1] = number;	// Set the COM port address.
     }
-   else if (!stricmp (ConfigName,"baud") && type == TYPE_NUMBER)
+   else if ((!stricmp (ConfigName,"baud")||!stricmp (ConfigName,"baudest")) &&
+   	    type == TYPE_NUMBER)
     {
-      static unsigned baudrates[] = {110,150,300,600,1200,2400,
-      				     4800,9600,19200,38400,57600};
+      static unsigned long baudrates[] = {110,150,300,600,1200,2400,
+      				     4800,9600,19200,38400,57600,115200};
       int baud=0;
-      while (baud < 11 && number != baudrates[baud])
+      while (baud <= BAUD_115200 && number != baudrates[baud])
         ++baud;
-      if (baud < 11)
-        ComParams = (ComParams & ~BAUD_RATE) | baud;
+      if (baud <= BAUD_115200)
+        {
+	  if (!stricmp (ConfigName,"baud"))
+	    ComParams = (ComParams & ~BAUD_RATE) | baud;
+	   else
+	    ComEstBaud = baud;
+	}
        else
         illegal ("baud rate");
     }
@@ -500,6 +610,14 @@ void	UWConfiguration::processline (char *line)
        else
         illegal ("number of data bits");
     }
+   else if (!stricmp (ConfigName,"bellfreq") && type == TYPE_NUMBER)
+    {
+      BellFreq = number;
+    }
+   else if (!stricmp (ConfigName,"belldur") && type == TYPE_NUMBER)
+    {
+      BellDur = number;
+    }
    else if (!stricmp (ConfigName,"font") && type == TYPE_STRING)
     {
       if (strlen (ConfigParam) >= FONT_STR_LEN)
@@ -523,53 +641,65 @@ void	UWConfiguration::processline (char *line)
        else
         illegal ("font character set");
     }
+   else if (!stricmp (ConfigName,"protocol") && type == TYPE_NUMBER)
+    {
+      if (number < 1 || number > 2)
+        illegal ("protocol number - must be 1 or 2");
+       else
+        MaxProtocol = number;
+    }
+   else if (!stricmp (ConfigName,"stlen") && type == TYPE_NUMBER)
+    {
+      if (((long)number) < 0 || number > 63)
+        illegal ("title length - must be between 0 and 63");
+       else
+        MaxTitleLen = number;
+    }
    else if (!stricmp (ConfigName,"langfile") && type == TYPE_STRING)
     {
+      NewTransFile = 1;
       strcpy (TransFile,ConfigParam);
     }
-   else if (!stricmp (ConfigName,"language") && type == TYPE_STRING)
+   else if (!stricmp (ConfigName,"language") &&
+   	    (type == TYPE_STRING || type == TYPE_IDENT))
     {
-      loadlang (ConfigParam);
+      if (stricmp (ConfigParam,"none"))
+        {
+          strcpy (Language,ConfigParam);
+          loadlang (ConfigParam);
+        }
     }
    else if (!stricmp (ConfigName,"init") && type == TYPE_STRING)
     {
       strcpy (InitString,ConfigParam);
     }
-   else if (!stricmp (ConfigName,"cinit") && type == TYPE_IDENT)
+   else if (!stricmp (ConfigName,"cinit") && type == TYPE_BOOL)
     {
-      if (!stricmp (ConfigParam,"yes"))
-        CarrierInit = 1;
-       else if (!stricmp (ConfigParam,"no"))
-        CarrierInit = 0;
-       else
-        illegal ("value: must be 'yes' or 'no'");
+      CarrierInit = number;
     }
-   else if (!stricmp (ConfigName,"ctsrts") && type == TYPE_IDENT)
+   else if (!stricmp (ConfigName,"direct") && type == TYPE_BOOL)
     {
-      if (!stricmp (ConfigParam,"yes"))
-        ComCtsRts = 1;
-       else if (!stricmp (ConfigParam,"no"))
-        ComCtsRts = 0;
-       else
-        illegal ("value: must be 'yes' or 'no'");
+      ComDirect = number;
     }
-   else if (!stricmp (ConfigName,"fossil") && type == TYPE_IDENT)
+   else if (!stricmp (ConfigName,"ctsrts") && type == TYPE_BOOL)
     {
-      if (!stricmp (ConfigParam,"yes"))
-        ComFossil = 1;
-       else if (!stricmp (ConfigParam,"no"))
-        ComFossil = 0;
-       else
-        illegal ("value: must be 'yes' or 'no'");
+      ComCtsRts = number;
     }
-   else if (!stricmp (ConfigName,"disable") && type == TYPE_IDENT)
+   else if (!stricmp (ConfigName,"ansibright") && type == TYPE_BOOL)
     {
-      if (!stricmp (ConfigParam,"yes"))
-        DisableUW = 1;
-       else if (!stricmp (ConfigParam,"no"))
-        DisableUW = 0;
-       else
-        illegal ("value: must be 'yes' or 'no'");
+      AnsiBright = number;
+    }
+   else if (!stricmp (ConfigName,"bigvideo") && type == TYPE_BOOL)
+    {
+      BigVideo = number;
+    }
+   else if (!stricmp (ConfigName,"fossil") && type == TYPE_BOOL)
+    {
+      ComFossil = number;
+    }
+   else if (!stricmp (ConfigName,"disable") && type == TYPE_BOOL)
+    {
+      DisableUW = number;
     }
    else if (!stricmp (ConfigName,"cursor") && type == TYPE_IDENT)
     {
@@ -582,6 +712,22 @@ void	UWConfiguration::processline (char *line)
        else
         illegal ("value: must be 'underline', 'halfheight' or 'fullheight'");
     }
+   else if (!stricmp (ConfigName,"fixterm") && type == TYPE_IDENT)
+    {
+      if (!stricmp (ConfigParam,"none"))
+        ShellKind = SHELL_NONE;
+       else if (!stricmp (ConfigParam,"sh"))
+        ShellKind = SHELL_BOURNE;
+       else if (!stricmp (ConfigParam,"csh"))
+        ShellKind = SHELL_CSHELL;
+       else
+        illegal ("value: must be 'none', 'sh', 'csh' or a string");
+    }
+   else if (!stricmp (ConfigName,"fixterm") && type == TYPE_STRING)
+    {
+      ShellKind = SHELL_STRING;
+      strcpy (ShellString,ConfigParam);
+    }
    else if (!stricmp (ConfigName,"hangup") && type == TYPE_STRING)
     {
       strcpy (HangupString,ConfigParam);
@@ -590,12 +736,16 @@ void	UWConfiguration::processline (char *line)
     {
       if (NumTermDescs >= MAX_DESCS)
         error ("Too many extra loaded terminal descriptions");
-      TermDescs[NumTermDescs++] = LoadTerminal (ConfigParam);
+       else
+        {
+          strcpy (TermFiles[NumTermDescs],ConfigParam);
+          TermDescs[NumTermDescs++] = LoadTerminal (ConfigParam);
+        }
     }
    else if (!stricmp (ConfigName,"emul") &&
    	    (type == TYPE_IDENT || type == TYPE_STRING))
     {
-      void *desc;
+      void far *desc;
       if ((desc = FindTerminal (ConfigParam)) == NULL)
         illegal ("terminal type");
       P1TermType = (unsigned char far *)desc;
@@ -603,7 +753,7 @@ void	UWConfiguration::processline (char *line)
    else if (!stricmp (ConfigName,"emul0") &&
    	    (type == TYPE_IDENT || type == TYPE_STRING))
     {
-      void *desc;
+      void far *desc;
       if ((desc = FindTerminal (ConfigParam)) == NULL)
         illegal ("terminal type");
       P0TermType = (unsigned char far *)desc;
@@ -617,59 +767,29 @@ void	UWConfiguration::processline (char *line)
        else
         illegal ("value: must be 'encoded' or 'direct'");
     }
-   else if (!stricmp (ConfigName,"beep") && type == TYPE_IDENT)
+   else if (!stricmp (ConfigName,"beep") && type == TYPE_BOOL)
     {
-      if (!stricmp (ConfigParam,"on"))
-        BeepEnable = 1;
-       else if (!stricmp (ConfigParam,"off"))
-        BeepEnable = 0;
-       else
-        illegal ("value: must be 'on' or 'off'");
+      BeepEnable = number;
     }
-   else if (!stricmp (ConfigName,"popup") && type == TYPE_IDENT)
+   else if (!stricmp (ConfigName,"popup") && type == TYPE_BOOL)
     {
-      if (!stricmp (ConfigParam,"on"))
-        PopUpNewWindow = 1;
-       else if (!stricmp (ConfigParam,"off"))
-        PopUpNewWindow = 0;
-       else
-        illegal ("value: must be 'on' or 'off'");
+      PopUpNewWindow = number;
     }
-   else if (!stricmp (ConfigName,"strip") && type == TYPE_IDENT)
+   else if (!stricmp (ConfigName,"strip") && type == TYPE_BOOL)
     {
-      if (!stricmp (ConfigParam,"on"))
-        StripHighBit = 1;
-       else if (!stricmp (ConfigParam,"off"))
-        StripHighBit = 0;
-       else
-        illegal ("value: must be 'on' or 'off'");
+      StripHighBit = number;
     }
-   else if (!stricmp (ConfigName,"mouse") && type == TYPE_IDENT)
+   else if (!stricmp (ConfigName,"mouse") && type == TYPE_BOOL)
     {
-      if (!stricmp (ConfigParam,"on"))
-        EnableMouse = 1;
-       else if (!stricmp (ConfigParam,"off"))
-        EnableMouse = 0;
-       else
-        illegal ("value: must be 'on' or 'off'");
+      EnableMouse = number;
     }
-   else if (!stricmp (ConfigName,"swapbs") && type == TYPE_IDENT)
+   else if (!stricmp (ConfigName,"swapbs") && type == TYPE_BOOL)
     {
-      if (!stricmp (ConfigParam,"on"))
-        SwapBSKeys = 1;
-       else if (!stricmp (ConfigParam,"off"))
-        SwapBSKeys = 0;
-       else
-        illegal ("value: must be 'on' or 'off'");
+      SwapBSKeys = number;
     }
-   else if (!stricmp (ConfigName,"status") && type == TYPE_IDENT)
+   else if (!stricmp (ConfigName,"status") && type == TYPE_BOOL)
     {
-      if (!stricmp (ConfigParam,"on"))
-        DisableStatusLine = 0;
-       else if (!stricmp (ConfigParam,"off"))
-        DisableStatusLine = 1;
-       else
-        illegal ("value: must be 'on' or 'off'");
+      DisableStatusLine = !number;
     }
    else if (!stricmp (ConfigName,"sformat") && type == TYPE_STRING)
     strcpy (StatusFormat,ConfigParam);
@@ -696,8 +816,39 @@ void	UWConfiguration::processline (char *line)
        else
         illegal ("status position");
     }
+   else if (!stricmp (ConfigName,"obeyterm") && type == TYPE_IDENT)
+    {
+      if (!stricmp (ConfigParam,"ignore"))
+        ObeyTerm = OBEY_IGNORE;
+       else if (!stricmp (ConfigParam,"always"))
+        ObeyTerm = OBEY_ALWAYS;
+       else if (!stricmp (ConfigParam,"notfirst"))
+        ObeyTerm = OBEY_NOTFIRST;
+       else
+        illegal ("terminal type override mode");
+    }
    else if (!stricmp (ConfigName,"dial") && type == TYPE_STRING)
     strcpy (DialString,ConfigParam);
+   else if (!stricmp (ConfigName,"dialprefix") && type == TYPE_STRING)
+    strcpy (DialPrefix,ConfigParam);
+   else if (!stricmp (ConfigName,"dialsuffix") && type == TYPE_STRING)
+    strcpy (DialSuffix,ConfigParam);
+   else if (!strncmpi (ConfigName,"dialnum",7) && type == TYPE_STRING)
+    {
+      int dnum = atoi (ConfigName + 7);
+      if (dnum < 1 || dnum > NUM_DIAL_STRINGS)
+        illegal ("dialing directory entry number");
+       else
+        strcpy (DialNumber[dnum - 1],ConfigParam);
+    }
+   else if (!strncmpi (ConfigName,"dialpar",7) && type == TYPE_STRING)
+    {
+      int dnum = atoi (ConfigName + 7);
+      if (dnum < 1 || dnum > NUM_DIAL_STRINGS)
+        illegal ("dialing directory entry number");
+       else
+        DialParams[dnum - 1] = parsecom (ConfigParam);
+    }
    else if (!stricmp (ConfigName,"uw") && type == TYPE_STRING)
     strcpy (CommandString,ConfigParam);
    else if (!stricmp (ConfigName,"uwftp") && type == TYPE_STRING)
@@ -743,10 +894,6 @@ void	UWConfiguration::processline (char *line)
 // Do the configuration for UW/PC.
 int	UWConfiguration::doconfig (char *argv0)
 {
-  static char *BaudRates[] = {"110","150","300","600","1200","2400",
-			      "4800","9600","19200","38400","57600",
-			      "115200"};
-  static char Parities[] = "NOE?";
   static char ConfigBuffer[BUFSIZ];
   char *FileName = "UW.CFG";
   FILE *file=NULL;
@@ -798,16 +945,15 @@ int	UWConfiguration::doconfig (char *argv0)
     StripHighBit = 1;
 
   // Setup the string version of the COM parameters //
-  SPRINTF (DeviceParameters,"COM%d %s %c-%c-%c",
-		ComPort,
-		(STRING)(BaudRates[ComParams & BAUD_RATE]),
-		Parities[(ComParams & PARITY_GET) >> 6],
-		((ComParams & BITS_8) ? '8' : '7'),
-		((ComParams & STOP_2) ? '2' : '1'));
+  makeparams ();
 
   // Set the default Protocol 0 terminal type if not set already //
   if (P0TermType == 0)
     P0TermType = P1TermType;
+
+  // Set the default baud rate estimate value //
+  if (ComEstBaud < 0)
+    ComEstBaud = ComParams & BAUD_RATE;
 
 #ifdef	UWPC_WINDOWS
   // Set the screen attributes for use by the Windows 3.0 version //
@@ -823,3 +969,53 @@ int	UWConfiguration::doconfig (char *argv0)
 
   return (1);			// Configuration succeeded.
 } // UWConfiguration::doconfig //
+
+// Process ComParams and create the DeviceParameters string.
+void	UWConfiguration::makeparams (void)
+{
+  static char *BaudRates[] = {"110","150","300","600","1200","2400",
+			      "4800","9600","19200","38400","57600",
+			      "115200"};
+  static char Parities[] = "NOE?";
+
+  SPRINTF (DeviceParameters,"COM%d %s %c-%c-%c",
+		ComPort,
+		(STRING)(BaudRates[ComParams & BAUD_RATE]),
+		Parities[(ComParams & PARITY_GET) >> 6],
+		((ComParams & BITS_8) ? '8' : '7'),
+		((ComParams & STOP_2) ? '2' : '1'));
+} // UWConfiguration::makeparams //
+
+// Test a terminal emulation to see if it is a particular terminal type.
+static	int	IsRightTermType (unsigned char far *emul,int termtype)
+{
+  int version = ((*(emul + 4)) & 255) + (((*(emul + 5)) & 255) << 8);
+  if (version >= UW_TERM_TYPECODE_VERS)
+    return (termtype == *(emul + 6));
+   else
+    return (0);
+} // IsRightTermType //
+
+// Get a terminal emulation for a particular terminal type.
+unsigned char far *UWConfiguration::getterminal (int termtype)
+{
+  int index=0;
+
+  // Search for a type in the loaded emulations //
+  while (index < NumTermDescs)
+    {
+      if (IsRightTermType ((unsigned char far *)(TermDescs[index]),termtype))
+        return ((unsigned char far *)(TermDescs[index]));
+      ++index;
+    }
+
+  // Test the type against the linked-in terminal emulations //
+  if (termtype == UWT_ADM31)
+    return ((unsigned char far *)&ADM31_Driver);
+   else if (termtype == UWT_VT52)
+    return ((unsigned char far *)&VT52_Driver);
+   else if (termtype == UWT_ANSI)
+    return ((unsigned char far *)&ANSI_Driver);
+   else
+    return (NULL);
+} // UWConfiguration::getterminal //

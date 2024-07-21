@@ -31,10 +31,13 @@
 //-------------------------------------------------------------------------
 
 		name	"ADM31"		// Name of the terminal type.
+		type	uwtadm31	// Protocol 2 terminal type.
 
 start:		reset	0		// Reset insert mode flag.
 		setattr	0		// Reset current attribute.
-loop:		getch			// Get next character from remote.
+		clrrgn			// Clear the scrolling region
+		deftabs			// Set the default tabstops.
+loop:		getchgi 0		// Get character and send if >= 32.
 		switch			// Determine top-level action.
 		  0x00,loop		// Ignore NUL characters
 		  '\r',crproc
@@ -61,7 +64,7 @@ lfproc:		lf
 		jmp	loop
 bsproc:		bs
 		jmp	loop
-tabproc:	tab
+tabproc:	tabnd
 		jmp	loop
 bellproc:	bell
 		jmp	loop
@@ -90,6 +93,9 @@ escproc:	getch			// Get the escape character.
 		  'I',loop		// adm42,22 - backtab (ignored for now)
 		  'i',tabproc		// adm22
 		  '|',doclient		// UW/PC client escape code
+		  ']',titles		// Simulate VT100 title setting cmds.
+		  'a',changekeys	// Change to ANSI keycodes.
+		  'b',backkeys		// Change back to standard keycodes.
 		endsw
 		jmp	loop		// Ignore the escape sequence.
 dummy:		getch			// Skip the cursor visibility char.
@@ -99,30 +105,14 @@ doclient:	getch			// Get the client operation character.
 		jmp	loop
 insertch:	insblank		// Insert a blank here.
 		jmp	loop
-right:		getxy
-		getx
-		add	1
-		cmp	width
-		jae	crlf
-		setx
-		move
+right:		load	1
+		mover
 		jmp	loop
-crlf:		cr
-		lf
-		jmp	loop
-upline:		getxy
-		gety
-		cmp	0
-		je	loop
-		sub	1
-		sety
-		move
+upline:		load	1
+		moveu
 		jmp	loop
 clrscrn:	clear
-home:		load	0
-		setx
-		sety
-		move
+home:		moveh
 		jmp	loop
 domove:		getch
 		sub	' '
@@ -160,6 +150,35 @@ enterins:	set	0			// Enter insert mode.
 		jmp	loop
 exitins:	reset	0			// Exit insert mode.
 		jmp	loop
+titles:		getch			// Check for ESC ] l/1/2.
+		cmp	'l'
+		je	titlevt
+		cmp	'1'
+		je	titlext
+		cmp	'2'
+		jne	loop
+titlext:	getch			// Check for ESC ] 1/2 ;
+		cmp	';'
+		jne	loop
+titlevt:	clrtitle		// Clear title and start fetching it.
+titleloop:	getch
+		cmp	7
+		je	endtitle	// BEL terminates xterm title cmds.
+		cmp	0x1B
+		je	esctitle	// ESC \ terminates vt100 title cmds.
+		cmp	' '		// Make sure the char is in range.
+		jb	titleloop
+		cmp	0x7F
+		jae	titleloop
+		addtitle		// Add the character to the title.
+		jmp	titleloop
+esctitle:	getch			// Eat next character and stop.
+endtitle:	showtitle		// Show the title that was read in.
+		jmp	loop
+changekeys:	keytab	ansikeys	// Switch to the ANSI key table.
+		jmp	loop
+backkeys:	keytab	keys		// Return to the standard ADM31 keys.
+		jmp	loop
 //
 // Define the keyboard translations to be performed.  Note that
 // the adm3e and adm22 terminal types use "\001@\r" ... for their
@@ -170,7 +189,7 @@ keys:		key	0x4800,"\013"		// Cursor Up key
 		key	0x4D00,"\014"		// Cursor Right key
 		key	0x4B00,"\010"		// Cursor Left key
 		key	0x4700,"\036"		// Home - adm3e, adm2
-		key	0x3B00,"\0011\r"	// F1
+funckeys:	key	0x3B00,"\0011\r"	// F1
 		key	0x3C00,"\0012\r"	// F2
 		key	0x3D00,"\0013\r"	// F3
 		key	0x3E00,"\0014\r"	// F4
@@ -181,3 +200,14 @@ keys:		key	0x4800,"\013"		// Cursor Up key
 		key	0x4300,"\0019\r"	// F9
 		key	0x4400,"\0010\r"	// F0
 		endkeys
+//
+// Define the ANSI cursor keys to be used when ESC-a has been received.
+// These are alternative keys to make things better for emacs, etc,
+// since the usual control keys are overloaded.
+//
+ansikeys:	key	0x4800,"\033[A"		// Cursor Up key
+		key	0x5000,"\033[B"		// Cursor Down key
+		key	0x4D00,"\033[C"		// Cursor Right key
+		key	0x4B00,"\033[D"		// Cursor Left key
+		key	0x4700,"\033[H"		// Cursor Home key
+		jmpkeys	funckeys

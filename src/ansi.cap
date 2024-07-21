@@ -1,10 +1,20 @@
 //-------------------------------------------------------------------------
 //
-// ANSI.CAP - Capability file for the ANSI terminal type.  This is sort
-//	      of a combination of ANSI and VT102.
+// ANSI.CAP - Capability file for the ANSI, VT100, VT102 and AVATAR terminals.
 // 
+//  To compile the ANSI terminal emulation component:
+//
+//	TERMCC ansi.cap ansi.trm
+//   or TERMCC -t ansi ansi.cap ansi.trm
+//
+//  To compile the VT100 terminal emulation component:
+//
+//	TERMCC -t vt100 ansi.cap vt100.trm
+//
+//  Compiling the VT102 and AVATAR emulation types is similar.
+//
 //  This file is part of UW/PC - a multi-window comms package for the PC.
-//  Copyright (C) 1990-1991  Rhys Weatherley
+//  Copyright (C) 1990-1992  Rhys Weatherley
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -28,26 +38,68 @@
 //    1.0    25/05/91  RW  Original Version of ANSI.CAP
 //    1.1    25/07/91  RW  Add support for client escapes.
 //    1.2    04/08/91  RW  Attempt to fix it and make it work. :-(
+//    1.3    15/03/92  RW  Make it more efficient in light of TERMCC mods.
+//			   Together with many more escape sequences.
+//    1.4    04/04/92  RW  Fine-tune some more and add AVATAR support.
+//    1.5    25/04/92  RW  Add title setting commands.
+//    1.6    07/05/92  RW  Update so vttest accepts this emulation more.
+//    1.7    04/06/92  RW  Overhaul to agree with VT225 manual.
+//
+// Flag bits:
+// ---------
+//
+//	0	Insert mode.
+//	1	UK-ASCII.
+//	2	Use send52 instead of send.
+//	3	VT52 mode.
+//	4	Application cursor key mode if set.
+//	5	Keypad application mode if set.
 //
 //-------------------------------------------------------------------------
 
-		name	"ANSI"		// Name of the terminal type.
+		names	[["ANSI",keys],["VT100",vt100keys],
+			 ["VT102",vt100keys],["AVATAR",keys]]
+		type	uwtansi if "ANSI" // Protocol 2 terminal type.
 
 start:		reset	0		// Reset insert mode flag.
 		setattr	0		// Reset current attribute.
-loop:		getch			// Get next character from remote.
-loop2:		switch			// Determine top-level action.
+		copyattr
+		reset	3		// Reset VT52 mode.
+		reset	4		// Reset cursor key mode.
+		reset	5		// Reset keypad key mode.
+		reset	1		// Reset UK-ASCII flag.
+		clrrgn			// Clear the scrolling region.
+		deftabs			// Set the default tab stops.
+changemodes:	reset	2		// Reset send52 flag.
+		namech	0
+		cmp	'A'		// Use "send" for ANSI/AVATAR.
+		je	loop
+		namech	4
+		cmp	'2'		// Use "send" for VT102.
+		je	loop
+		set	2		// Use "send52" for VT100.
+loop:		getchgsi 2,0		// Get character and send if >= 32.
+		switch			// Determine top-level action.
 		  0x00,loop		// Ignore NUL characters
 		  '\r',crproc
 		  '\n',lfproc
 		  '\b',bsproc
 		  '\t',tabproc
+		  0x0C,clrscrn
+		  0x0E,altcharson
+		  0x0F,altcharsoff
 		  0x07,bellproc
 		  0x1B,escproc
+		  0x16,avataresc	// Test the AVATAR ^V escapes.
+		  0x19,avatarrep	// Test the AVATAR character repeat.
 		endsw
 		test	0		// Test the insertion flag.
 		jne	insert
-		send			// Send the character direct.
+		test	2
+		jne	dosend52
+normsend:	send			// Send the character direct.
+		jmp	loop
+dosend52:	send52			// Send using VT52 line endings.
 		jmp	loop
 insert:		inschar			// Insert the received character.
 		jmp	loop		// Back around for another character.
@@ -57,13 +109,21 @@ lfproc:		lf
 		jmp	loop
 bsproc:		bs
 		jmp	loop
-tabproc:	tab
+clrscrn:	moveh
+		namech	1		// See if it is an AVATAR terminal.
+		cmp	'V'
+		jne	notavclr
+		setattr	0		// Reset to the normal attribute
+		copyattr		// for the AVATAR clear command.
+notavclr:	clear
+		jmp	loop
+tabproc:	tabnd			// TABs are non-destructive.
 		jmp	loop
 dotabs:		geta	1,1		// Get number of tabs to do.
 		cmp	0
 		je	loop
 		setc
-tabloop:	tab
+tabloop:	tabnd
 		dec
 		jne	tabloop
 		jmp	loop
@@ -74,7 +134,7 @@ ignorearg:	dec			// This is not nice to the
 escproc:	getch			// Get the escape character.
 		cmp	'['		// Check for ESC [ sequences
 		jne	singles
-		resarr			// Prepare to fill the argument array.
+resetargs:	resarr			// Prepare to fill the argument array.
 getnums:	getarg			// Get a numeric argument.
 		cmp	';'		// Check if another is to follow.
 		je	getnums
@@ -84,6 +144,10 @@ getnums:	getarg			// Get a numeric argument.
 		je	ignorearg	// Ignore '>'s as well.
 		cmp	0x1B		// If ESC then get another sequence.
 		je	escproc
+		cmp	0x18		// If CTRL-X then abort sequence.
+		je	loop
+		cmp	0x08		// If BS then remove last digit.
+		je	resetargs	// <= not right, but will pass vttest.
 		switch			// Test escape action wanted.
 		  '@',doinschar
 		  'A',upline
@@ -103,17 +167,18 @@ getnums:	getarg			// Get a numeric argument.
 		  'Z',loop		// Backtab - ignored for now.
 		  'a',right
 		  'b',loop		// Repeat char - ignored for now.
+		  'c',ident2
 		  'd',setrow
 		  'e',dnline
 		  'f',domove
-		  'g',loop		// Clear tabs - don't worry.
+		  'g',killtab
 		  'h',chkins
 		  'l',chkins2
 		  'm',attrs
-		  'r',loop		// No scrolling margins yet.
+		  'n',reports
+		  'r',margins
 		  's',saveall
 		  'u',restall
-		  '|',doclient		// UW/PC client escapes.
 		endsw
 		jmp	loop		// Ignore the escape sequence.
 doclient:	getch			// Get the client operation character.
@@ -122,10 +187,14 @@ doclient:	getch			// Get the client operation character.
 chkins:		geta	1,0
 		cmp	4		// Check to see if insert mode is req.
 		je	enterins
+		cmp	1		// Check to see if keypad mode is req.
+		je	altkeypad
 		jmp	loop
 chkins2:	geta	1,0
 		cmp	4		// Check for normal mode request.
 		je	exitins
+		cmp	1		// Check for normal keypad mode req.
+		je	normkeypad
 		jmp	loop
 saveall:	savexy			// Save the terminal statistics.
 		saveattr
@@ -137,15 +206,41 @@ singles:	resarr			// Reset arg array for cursor moves.
 		switch			// Test single code after ESC.
 		  '7',saveall
 		  '8',restall
-		  'D',dnline
+		  'A',upline
+		  'B',dnline
+		  'C',right
+		  'D',lfproc
 		  'E',crlf
-		  'H',loop		// Set tab - ignored here.
-		  'M',upscroll
+		  'F',altcharson
+		  'G',altcharsoff
+		  'H',maketab
+		  'I',dorevlf
+		  'J',doclear
+		  'K',doclrln
+		  'M',dorevlf
+		  'Z',ident
 		  'c',hardreset
-		  '#',dummy		// Ignore character size requests.
+		  '(',altcharset
+		  ')',altcharset
+		  '*',altcharset
+		  '+',altcharset
+		  '-',altcharset
+		  '.',altcharset
+		  '/',altcharset
+		  '=',altkeypad
+		  '>',normkeypad
+		  '#',charsizes
+		  ']',titles
+		  '|',doclient		// UW/PC client escapes.
 		endsw
 		jmp	loop
 dummy:		getch
+		jmp	loop
+charsizes:	getch			// Get char size request character.
+		cmp	'8'		// only alignment test supported here.
+		jne	loop
+		load	'E'		// Character for the alignment test.
+		align			// Perform an alignment test.
 		jmp	loop
 hardreset:	clear			// Reset terminal characteristics.
 		load	0
@@ -155,36 +250,15 @@ hardreset:	clear			// Reset terminal characteristics.
 		jmp	start
 right:		geta	1,1		// Get number of places to move right.
 		cmp	0
-		je	loop		// Ignore move if 0
-		setc			// Set argument counter
-rightloop:	getxy
-		getx
-		add	1
-		cmp	width
-		jae	docrlf
-		setx
-		move
-		dec
-		jne	rightloop
-		jmp	loop
-docrlf:		cr
-		lf
-		dec
-		jne	rightloop
+		jne	dorightmove
+		load	1
+dorightmove:	mover			// Do the move
 		jmp	loop
 left:		geta	1,1		// Get number of places to move left.
 		cmp	0
-		je	loop		// Ignore move if 0
-		setc			// Set argument counter
-leftloop:	getxy
-		getx
-		cmp	0
-		je	loop
-		sub	1
-		setx
-		move
-		dec
-		jne	leftloop
+		jne	doleftmove
+		load	1
+doleftmove:	movel			// Do the move.
 		jmp	loop
 setcolumn:	geta	1,1		// Get first argument (def is 1)
 		sub	1
@@ -209,41 +283,25 @@ crlfloop:	cr
 		jmp	loop
 upline:		geta	1,1		// Get number of places to move up.
 		cmp	0
-		je	loop		// Ignore move if 0
-		setc			// Set argument counter
-uploop:		getxy
-		gety
-		cmp	0
-		je	loop
-		sub	1
-		sety
-		move
-		dec
-		jne	uploop
+		jne	doupmove
+		load	1
+doupmove:	moveu			// Do the move.
+		jmp	loop
+dorevlf:	revlf			// Do a reverse line feed sequence.
 		jmp	loop
 upscroll:	geta	1,1		// Get number of times to scroll up.
 		cmp	0
 		je	loop
 		setc
-upscloop:	getxy
-		gety
-		cmp	0
-		je	doscrollup
-		sub	1
-		sety
-		move
+upscloop:	revlf			// Go up one line (scroll if nec).
 		dec
 		jne	upscloop
 		jmp	loop
-doscrollup:	insline
-		jmp	loop
 dnline:		geta	1,1		// Get number of places to move down.
 		cmp	0
-		je	loop		// Ignore move if 0
-		setc			// Set argument counter
-dnloop:		lf
-		dec
-		jne	dnloop
+		jne	dodnmove
+		load	1
+dodnmove:	moved			// Do the move.
 		jmp	loop
 doclear:	geta	1,0		// get clear code (def is 0)
 		switch
@@ -268,10 +326,7 @@ clrendln:	clreol
 clrline:	clreol
 clrstart:	clrsol
 		jmp	loop
-home:		load	0
-		setx
-		sety
-		move
+home:		moveh
 		jmp	loop
 domove:		geta	1,1
 		sub	1
@@ -297,9 +352,8 @@ insloop2:	insblank
 		dec
 		jne	insloop2
 		jmp	loop
-attrs:		setattr	0		// Go to the normal attribute first
-		dec
-		jb	loop		// No arguments - ignore rest.
+attrs:		dec
+		jb	setnormal	// No arguments - set to normal.
 attrloop:	geta	1,0		// Get next attribute indicator
 		cmp	0		// Check for normal attr.
 		je	normattr
@@ -307,22 +361,43 @@ attrloop:	geta	1,0		// Get next attribute indicator
 		je	normattr
 		cmp	1		// Check for the "bold" attribute.
 		je	bold
+		cmp	5		// Check for the "blink" attribute.
+		je	blink
+		cmp	22		// Check for VT320 "bold off".
+		je	boldoff
+		cmp	25		// Check for VT320 "blink off".
+		je	blinkoff
+		cmp	40		// Check for background colours.
+		jae	backcol
+		cmp	30		// Check for foreground colours.
+		jae	forecol
+		cmp	20		// Check for other VT320 "turn offs".
+		jae	normattr
 		setattr	1		// Set inverse for everything else.
-		shift
+attrend:	shift
 		dec
 		jae	attrloop
+		copyattr		// Now set the final scrolling attr.
 		jmp	loop
-normattr:	shift
-		jmp	attrs
-bold:		setattr	2		// Set bold as the highlighted attr.
-		shift
-		dec
-		jae	attrloop
+normattr:	setattr	0
+		jmp	attrend
+setnormal:	setattr	0
+		copyattr
 		jmp	loop
-normal:		setattr	0
-		jmp	loop
-standout:	setattr 1
-		jmp	loop
+backcol:	sub	40		// Set the background colour now
+		setback			// using the ANSI colour scheme.
+		jmp	attrend
+forecol:	sub	30		// Set the foreground colour now
+		setfore			// using the ANSI colour scheme.
+		jmp	attrend
+bold:		setbold			// Set the bold bit on.
+		jmp	attrend
+boldoff:	setboldoff		// Turn off the bold bit.
+		jmp	attrend
+blink:		setblink		// Set the blinking bit on.
+		jmp	attrend
+blinkoff:	setblinkoff		// Turn off the blinking bit.
+		jmp	attrend
 dodelline:	geta	1,1		// Get number of lines to delete.
 		cmp	0
 		je	loop
@@ -345,16 +420,311 @@ enterins:	set	0			// Enter insert mode.
 		jmp	loop
 exitins:	reset	0			// Exit insert mode.
 		jmp	loop
+altcharset:	getch			// Enable character set calls.
+		reset	1
+		cmp	'A'		// Check for UK-ASCII.
+		jne	donealt
+		set	1		// Turn on UK-ASCII bit.
+donealt:	jsr	resetalt	// Reset the character set.
+		jmp	loop
+resetalt:	clrmap			// Reset the character mappings.
+		test	1		// Do we want UK-ASCII?
+		je	exitalt		// If not, simply ignore
+		map	'#',156		// Create the mapping.
+exitalt:	ret			// Return from this subroutine.
+altcharsoff:	jsr	resetalt	// Reset the character set.
+		jmp	loop
+altcharson:	jsr	resetalt	// Turn on the alternative char set.
+		map	'+',26		// arrow right
+		map	',',27		// arrow left
+		map	'.',25		// arrow down
+		map	'0',219		// solid block
+		map	'I',232		// lantern (??)
+		map	'-',24		// arrow up
+		map	'`',4		// diamond
+		map	'a',177		// checker board
+		map	'f',248		// degree symbol
+		map	'g',241		// plus or minus
+		map	'h',176		// board of squares
+		map	'j',217		// lower right corner
+		map	'k',191		// upper right corner
+		map	'l',218		// upper left corner
+		map	'm',192		// lower left corner
+		map	'n',197		// crossing horz and vert lines
+		map	'o',223		// scan line 1 (??)
+		map	'q',196		// horizontal line
+		map	's',220		// scan line 9 (??)
+		map	't',195		// left tee
+		map	'u',180		// right tee
+		map	'v',193		// bottom tee
+		map	'w',194		// top tee
+		map	'x',179		// vertical line
+		map	'~',7		// bullet
+		jmp	loop
+margins:	geta	1,1		// Set scrolling margins.
+		sub	1		// The default size is (1,height).
+		setx
+		geta	2,height
+		sub	1
+		sety
+		region
+		jmp	loop
+altkeypad:	namech	0		// Go into keypad mode.
+		cmp	'V'
+		jne	loop		// If not VT100 then ignore request.
+		keytab	vt100keypad
+		jmp	loop
+normkeypad:	namech	0		// Return from keypad mode.
+		cmp	'V'
+		jne	loop		// If not VT100 then ignore request.
+		keytab	vt100keys
+		jmp	loop
+reports:	geta	1,0		// Determine the type of device report.
+		switch
+		  5,malfunc
+		  6,cursposn
+		endsw
+		jmp	loop
+malfunc:	remstr	"\033[0n"	// Report no malfunction of terminal.
+		jmp	loop
+cursposn:	remstr	"\033["		// Send the current cursor position.
+		getxy
+		gety
+		add	1
+		remnum
+		load	';'
+		remote
+		getx
+		add	1
+		remnum
+		load	'R'
+		remote
+		jmp	loop
+maketab:	settab			// Set a tab at the current position.
+		jmp	loop
+killtab:	geta	1,0		// Clear current or all tabs.
+		cmp	0
+		je	killonetab
+		cmp	3
+		jne	loop
+		clrtabs			// Clear all of the tabs.
+		jmp	loop
+killonetab:	restab			// Clear just the current tab.
+		jmp	loop
+ident:		remstr	"\033[?6c"	// Identify ourselves as a VT102 (??).
+		jmp	loop
+ident2:		remstr	"\033[?1;0c"	// From PC-8250 program - is it right?
+		jmp	loop
+titles:		getch			// Check for ESC ] l/1/2.
+		cmp	'l'
+		je	titlevt
+		cmp	'1'
+		je	titlext
+		cmp	'2'
+		jne	loop
+titlext:	getch			// Check for ESC ] 1/2 ;
+		cmp	';'
+		jne	loop
+titlevt:	clrtitle		// Clear title and start fetching it.
+titleloop:	getch
+		cmp	7
+		je	endtitle	// BEL terminates xterm title cmds.
+		cmp	0x1B
+		je	esctitle	// ESC \ terminates vt100 title cmds.
+		cmp	' '		// Make sure the char is in range.
+		jb	titleloop
+		cmp	0x7F
+		jae	titleloop
+		addtitle		// Add the character to the title.
+		jmp	titleloop
+esctitle:	getch			// Eat next character and stop.
+endtitle:	showtitle		// Show the title that was read in.
+		jmp	loop
+avataresc:	namech	1		// Test if an AVATAR terminal.
+		cmp	'V'
+		jne	normsend
+		direct			// Get following characters directly.
+		getch
+		nodirect
+		switch
+		  0x01,avattr		// Fetch an avatar attribute byte.
+		  0x02,avblink		// Turn on avatar blink bit.
+		  0x03,avupline		// Move up one line.
+		  0x04,avdnline		// Move down one line.
+		  0x05,avleft		// Move left one character.
+		  0x06,avright		// Move right one character.
+		  0x07,avclreol		// Clear to the end of the line.
+		  0x08,avmove		// Move the cursor.
+		endsw
+		jmp	loop
+avattr:		direct			// Fetch attribute in direct mode.
+		getch
+		nodirect
+		setattr
+		jmp	loop
+avblink:	setblink
+		jmp	loop
+avupline:	load	1
+		moveu
+		jmp	loop
+avdnline:	load	1
+		moved
+		jmp	loop
+avleft:		load	1
+		movel
+		jmp	loop
+avright:	load	1
+		mover
+		jmp	loop
+avclreol:	clreol
+		jmp	loop
+avmove:		direct			// Get the co-ordinates in direct mode.
+		getch
+		sety
+		getch
+		setx
+		nodirect
+		move
+		jmp	loop
+avatarrep:	namech	1		// Test if an AVATAR terminal.
+		cmp	'V'
+		jne	normsend
+		direct			// Get following characters directly.
+		getch			// Get the repeat count.
+		setc
+		setx
+		getch			// Get the character to repeat.
+		sety
+		nodirect
+		getx
+		cmp	0
+		je	loop		// Quit if repeat count is zero.
+		gety
+avreploop:	send			// Loop around sending the character.
+		dec
+		jne	avreploop
+		jmp	loop
+
 //
-// Define the keyboard translations to be performed.
+// Define the keyboard translations to be performed.  This is a mixture
+// of ANSI and VT100 codes, with preference given to ANSI.
 //
 keys:		key	0x4800,"\033[A"		// Cursor Up key
 		key	0x5000,"\033[B"		// Cursor Down key
 		key	0x4D00,"\033[C"		// Cursor Right key
 		key	0x4B00,"\033[D"		// Cursor Left key
 		key	0x4700,"\033[H"		// Cursor Home key
-		key	0x3B00,"\033OP"		// F1 (VT100)
-		key	0x3C00,"\033OQ"		// F2 (VT100)
-		key	0x3D00,"\033OR"		// F3 (VT100)
-		key	0x3E00,"\033OS"		// F4 (VT100)
+commonkeys:	key	0x3B00,"\033OP"		// F1
+		key	0x3C00,"\033OQ"		// F2
+		key	0x3D00,"\033OR"		// F3
+		key	0x3E00,"\033OS"		// F4
+		key	0x3F00,"\033Ot"		// F5
+		key	0x4000,"\033Ou"		// F6
+		key	0x4100,"\033Ov"		// F7
+		key	0x4200,"\033Ol"		// F8
+		key	0x4300,"\033Ow"		// F9
+		key	0x4400,"\033Ox"		// F10
+		key	0x5D00,"\033Oy"		// F0 (SHIFT-F10)
 		endkeys
+//
+// Define the standard VT100 keyboard layout, and the keypad
+// mode layout.  These tables jump into the above table to get
+// the things that are common to all terminal types.
+//
+vt100keys:	key	0x4800,"\033OA"		// Cursor Up key
+		key	0x5000,"\033OB"		// Cursor Down key
+		key	0x4D00,"\033OC"		// Cursor Right key
+		key	0x4B00,"\033OD"		// Cursor Left key
+		jmpkeys	commonkeys
+//
+// The following keypad layout is simply for the numeric keys.
+// It jumps into the above table for everything else.  The keypad
+// is as follows:
+//
+//      IBM keys	VT100 sequence
+//	--------	--------------
+//	7  8  9		ESC-O-q nothing ESC-O-s
+//	4  5  6		nothing ESC-O-r nothing
+//      1  2  3		ESC-O-p nothing ESC-O-n
+//
+// The tranlated sequences are used only when Num Lock is off, or if
+// the extra 101-key keyboard cursor movement keys "Home", "PgUp",
+// "End" and "PgDn" are pressed.
+//
+vt100keypad:	key	0x4700,"\033Oq"		// Upper left of keypad
+		key	0x4900,"\033Os"		// Upper right of keypad
+		key	0x4C00,"\033Or"		// Middle of keypad
+		key	0x4F00,"\033Op"		// Lower left of keypad
+		key	0x5100,"\033On"		// Lower right of keypad
+		jmpkeys	vt100keys
+//
+// The new key table.
+//
+// newkeys:	keytest	3,newvt52keys		// Check for VT52 key mappings.
+// 		keytest 4,newcurskeys		// Check for appl cursor keys.
+// 		key	0x4800,"\033[A"		// Cursor Up
+// 		key	0x5000,"\033[B"		// Cursor Down
+// 		key	0x4D00,"\033[C"		// Cursor Right
+// 		key	0x4B00,"\033[D"		// Cursor Left
+// chkkeypadkeys:	keytest 5,newkeypadkeys		// Check for appl keypad keys.
+// newfkeys:	key	0x3B00,"\033OP"		// F1
+// 		key	0x3C00,"\033OQ"		// F2
+// 		key	0x3D00,"\033OR"		// F3
+// 		key	0x3E00,"\033OS"		// F4
+// 		key	0x3F00,"\033Ot"		// F5
+// 		key	0x4000,"\033Ou"		// F6
+// 		key	0x4100,"\033Ov"		// F7
+// 		key	0x4200,"\033Ol"		// F8
+// 		key	0x4300,"\033Ow"		// F9
+// 		key	0x4400,"\033Ox"		// F10
+// 		key	0x5D00,"\033Oy"		// F0 (SHIFT-F10)
+// 		endkeys
+//
+// Process the VT52 keystrokes.
+//
+// newvt52keys:	key	0x4800,"\033A"		// Cursor Up
+// 		key	0x5000,"\033B"		// Cursor Down
+// 		key	0x4D00,"\033C"		// Cursor Right
+// 		key	0x4B00,"\033D"		// Cursor Left
+// 		key	0x3B00,"\033P"		// F1
+// 		key	0x3C00,"\033Q"		// F2
+// 		key	0x3D00,"\033R"		// F3
+// 		key	0x3E00,"\033S"		// F4
+// 		keytest	5,newvt52keypad
+// 		endkeys
+//
+// Keypad sequences for a VT52 in application mode.
+//
+// newvt52keypad:	key	0x5200,"\033?p"		// Numeric-0
+// 		key	0x4F00,"\033?q"		// Numeric-1
+// 		key	0x5000,"\033?r"		// Numeric-2 (down arrow)
+// 		key	0x5100,"\033?s"		// Numeric-3
+// 		key	0x4B00,"\033?t"		// Numeric-4 (left arrow)
+// 		key	0x4C00,"\033?u"		// Numeric-5
+// 		key	0x4D00,"\033?v"		// Numeric-6 (right arrow)
+// 		key	0x4700,"\033?w"		// Numeric-7
+// 		key	0x4800,"\033?x"		// Numeric-8 (up arrow)
+// 		key	0x4900,"\033?y"		// Numeric-9
+// 		endkeys
+//
+// Process the cursor keys in application mode.
+//
+// newcurskeys:	key	0x4800,"\033OA"		// Cursor Up
+// 		key	0x5000,"\033OB"		// Cursor Down
+// 		key	0x4D00,"\033OC"		// Cursor Right
+// 		key	0x4B00,"\033OD"		// Cursor Left
+// 		jmpkeys	chkkeypadkeys
+//
+// Process the keypad keys in application mode.
+//
+// newkeypadkeys:	key	0x5200,"\033Op"		// Numeric-0
+// 		key	0x4F00,"\033Oq"		// Numeric-1
+// 		key	0x5000,"\033Or"		// Numeric-2 (down arrow)
+// 		key	0x5100,"\033Os"		// Numeric-3
+// 		key	0x4B00,"\033Ot"		// Numeric-4 (left arrow)
+// 		key	0x4C00,"\033Ou"		// Numeric-5
+// 		key	0x4D00,"\033Ov"		// Numeric-6 (right arrow)
+// 		key	0x4700,"\033Ow"		// Numeric-7
+// 		key	0x4800,"\033Ox"		// Numeric-8 (up arrow)
+// 		key	0x4900,"\033Oy"		// Numeric-9
+// 		jmpkeys	newfkeys

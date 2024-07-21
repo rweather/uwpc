@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------
 //
-// TIMER.H - Timer declarations for UW/PC.
+// DIAL.H - Declarations for the dialing directory.
 // 
 //  This file is part of UW/PC - a multi-window comms package for the PC.
 //  Copyright (C) 1990-1992  Rhys Weatherley
@@ -24,41 +24,17 @@
 //
 //  Version  DD/MM/YY  By  Description
 //  -------  --------  --  --------------------------------------
-//    1.0    07/04/91  RW  Original Version of TIMER.H
-//    1.1    24/04/92  RW  Add CurrSystemTime call.
+//    1.0    05/04/92  RW  Original Version of DIAL.H
 //
 //-------------------------------------------------------------------------
 
-#ifndef __TIMER_H__
-#define	__TIMER_H__
+#ifndef __DIAL_H__
+#define	__DIAL_H__
 
 //
-// Define various system timer values for UW/PC.
+// Popup the dialing directory so the user can select a number.
+// If there are no dialing directory entries, then just do a quick dial.
 //
-extern	int	CurrentTime;	// Current 24-hour time in minutes.
-extern	int	OnlineTime;	// Time in minutes since logon (mod 6000).
-extern	int	TimerCount;	// Incremented every 18.2th of a second.
+void	DialingDirectory (UWDisplay *wind);
 
-//
-// Initialise the system timer routines.
-//
-void	InitTimers	(void);
-
-//
-// Terminate the system timer routines.
-//
-void	TermTimers	(void);
-
-//
-// Reset the current online time to zero.
-//
-void	ResetOnline	(void);
-
-//
-// Get the current system time as a number of minutes since midnight.
-// This uses operating system calls rather than timer ticks to get
-// the time more accurately.
-//
-int	CurrSystemTime	(void);
-
-#endif	/* __TIMER_H__ */
+#endif	/* __DIAL_H__ */

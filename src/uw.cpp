@@ -10,7 +10,7 @@
 //	 user-requested exit is in progress.
 //
 //  This file is part of UW/PC - a multi-window comms package for the PC.
-//  Copyright (C) 1990-1991  Rhys Weatherley
+//  Copyright (C) 1990-1992  Rhys Weatherley
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -36,6 +36,9 @@
 //    1.2    26/05/91  RW  Add command-line to "jumpdos".
 //    1.3    08/06/91  RW  Add mouse support to the clients.
 //    1.4    31/10/91  RW  Port this module to Windows 3.0.
+//    1.5    15/03/92  RW  Add lots of Protocol 2 support.
+//    1.6    27/04/92  RW  Fine-tune the scheduling of requests.
+//    1.7    10/05/92  RW  Don't translate VK_BACK into WM_CHAR.
 //
 //-------------------------------------------------------------------------
 
@@ -46,8 +49,9 @@
 #include "uwproto.h"		// UW protocol constants.
 #include "display.h"		// UW client display routines.
 #include "keys.h"		// Keyboard handling routines.
-#ifdef	UWPC_DOS
 #include "screen.h"		// Screen handling routines.
+#include "opcodes.h"		// Opcodes for the terminal descriptions.
+#ifdef	UWPC_DOS
 #include "timer.h"		// System timer handlers.
 #include "mouse.h"		// Mouse accessing routines.
 #else	/* UWPC_DOS */
@@ -59,10 +63,32 @@
 
 #pragma	warn	-par
 
+extern	int	DebugMode;
+extern	FILE	*DebugFile;
+
 //
 // Define the master object for handling the UW protocol.
+// Also define all of its static members.
 //
 UWProtocol	UWMaster;
+#ifdef	DOOBERY
+int	UWProtocol::CurrWindow;
+int	UWProtocol::LastInput;
+int	UWProtocol::RoundWindow;
+int	UWProtocol::OutputWindow;
+int	UWProtocol::gotmeta;
+int	UWProtocol::gotiac;
+int	UWProtocol::getpcl;
+int	UWProtocol::newwind;
+int	UWProtocol::dirproc;
+UWClient  *UWProtocol::clients[NUM_UW_WINDOWS];
+UWDisplay *UWProtocol::displays[NUM_UW_WINDOWS];
+int	UWProtocol::numwinds;
+UWClient  *UWProtocol::freelist;
+int	UWProtocol::terminate;
+int	UWProtocol::exitmulti;
+int	UWProtocol::protocol;
+#endif
 
 //
 // Define the special control codes to be translated.
@@ -85,10 +111,59 @@ extern	char	*TitleString;
 //
 #define	UW_TERM_CLASS	UWTermDesc
 
+//
+// Define the protocol flags for UWMaster.protoflags.
+//
+#define	PF_IAC		1	// We just received an IAC character.
+#define	PF_META		2	// A meta sequence was just received.
+#define	PF_PNEG		4	// Protocol negotiation is in effect.
+#define	PF_STRIP	8	// Strip high bits from the characters.
+#define	PF_UWOFF	16	// Don't use the UW protocol at all.
+#define	PF_DIRECT	32	// Pass characters through directly.
+#define	PF_PROTO1	64	// Protocol 1 and higher is in effect.
+#define	PF_PROTO2	128	// Protocol 2 and higher is in effect.
+#define	PF_WTYPE	256	// Get window type in protocol 2.
+#define	PF_NEGSET	512	// Negotiate a protocol set.
+#define	PF_NEGCAN	1024	// Negotiate a protocol cancel.
+#define	PF_WOPT		2048	// Reading window options from remote.
+
+//
+// Define the option state values for UWMaster.optflag.
+//
+#define	OPT_CMD		0	// Get the first command character.
+#define	OPT_LCMD	1	// Get the second command character.
+#define	OPT_INQUIRE	2	// Request for current
+#define	OPT_SET		3	// Processing on option setting command.
+#define	OPT_SKIP_1	4	// Skip one byte from the remote host.
+#define	OPT_SKIP_2	5	// Skip two bytes from the remote host.
+#define	OPT_SKIP_3	6	// Skip three bytes from the remote host.
+#define	OPT_SKIP_4	7	// Skip four bytes from the remote host.
+#define	OPT_SKIP_STR	8	// Skip the bytes of a string from the host.
+
+// Get a terminal type from a terminal emulation.
+static	int	GetTermType (unsigned char far *emul)
+{
+  // Determine the terminal type to create Protocol 2 windows with by //
+  // inspecting the terminal type in the default Protocol 1 emulation //
+  int version = ((*(emul + 4)) & 255) + (((*(emul + 5)) & 255) << 8);
+  if (version >= UW_TERM_TYPECODE_VERS)
+    return (*(emul + 6));	// Read the compiled-in terminal type.
+   else
+    return (UWT_ADM31);		// Default to ADM31 if unknown.
+} // GetTermType //
+
 // Transmit a character to the remote host.
 inline	void	transmit (int ch)
 {
   comsend (UWConfig.ComPort,ch);
+#ifdef	TRANS_DEBUG
+  if (DebugMode)
+    {
+      fputc ('<',DebugFile);
+      fputc (ch,DebugFile);
+      fputc ('>',DebugFile);
+    }
+#endif
 } // transmit //
 
 // Send a UW command to the remote host.
@@ -97,6 +172,244 @@ void	UWProtocol::command (int cmd)
   transmit (P1_IAC);
   transmit (cmd | P1_DIR_CTOH);
 } // UWProtocol::command //
+
+// Output a Protocol 2 option command to the remote host.
+void	UWProtocol::option (int window,int action,int optnum)
+{
+  command (P2_FN_WOPT | window);
+  if (!WONUM_USELONG(optnum))
+    transmit (action | WONUM_SENCODE(optnum));
+   else
+    {
+      transmit (action | WONUM_LPREFIX);
+      transmit (WONUM_LENCODE(optnum));
+    } /* if */
+} // UWProtocol::option //
+
+// Output a numeric option argument to the remote host.
+// If "longval" is non-zero, the argument is 12-bit, rather
+// than 6-bit.
+void	UWProtocol::optarg (int arg,int longval)
+{
+  transmit (0100 | (arg & 077));
+  if (longval)
+    transmit (0100 | ((arg >> 6) & 077));
+} // UWProtocol::optarg //
+
+#define	WMASK(n)	((n) & (NUM_UW_WINDOWS - 1))
+
+// Process a received option character for window "newwind".
+void	UWProtocol::procoptions (int ch)
+{
+  int optnum,windnum;
+  static int previac;
+  if (DebugMode)
+    fputc ('0' + optflag,DebugFile);
+  switch (optflag)
+    {
+      case OPT_CMD:
+		newwind = WMASK (newwind) | (WONUM_COMMAND(ch) << 6);
+		if ((ch & WONUM_MASK) == WONUM_LPREFIX)
+		  {
+		    // Need to get the long form of an option //
+		    optflag = OPT_LCMD;
+		    break;
+		  } /* if */
+      		optnum = WONUM_SDECODE(ch);
+		// Fall through to long option processing //
+      case OPT_LCMD:
+      		if (optflag == OPT_LCMD)
+		  optnum = WONUM_LDECODE(ch);
+		optflag = OPT_CMD;
+		if (optnum == WOG_END)
+		  {
+		    // The option processing has finished //
+		    protoflags &= ~PF_WOPT;
+		    newwind = 0; // Must be set to 0 or create window mucks up.
+		    break;
+		  } /* if */
+		switch (newwind >> 6)
+		  {
+		    case WOC_SET:	optflag = OPT_SET; break;
+		    case WOC_INQUIRE:	optflag = OPT_INQUIRE; break;
+		    case WOC_DO:	option(WMASK(newwind),WOC_WILL,optnum);
+		    			transmit (0);
+		    			optflag = OPT_INQUIRE;
+		    			break;
+		    case WOC_DONT:	option(WMASK(newwind),WOC_WONT,optnum);
+		    			transmit (0);
+		    			break;
+		    default:		break;
+		  } /* switch */
+		break;
+      case OPT_SKIP_1:
+      		optflag = OPT_CMD;
+		break;
+      case OPT_SKIP_2:
+      		optflag = OPT_SKIP_1;
+		break;
+      case OPT_SKIP_3:
+      		optflag = OPT_SKIP_2;
+		break;
+      case OPT_SKIP_4:
+      		optflag = OPT_SKIP_3;
+		break;
+      case OPT_SKIP_STR:
+      		windnum = WMASK(newwind);
+      		if (ch == 0)
+		  {
+		    // Got the end of the string - show the title now //
+		    optflag = OPT_CMD;
+		    if (displays[windnum])
+		      displays[windnum] -> showtitle ();
+		    status ();
+		  }
+		 else
+		  {
+		    // Another character in the string to add to the title //
+		    if (previac)
+		      {
+		        if ((ch & P1_FN) != P1_FN_META &&
+			    (ch & P1_FN) != P1_FN_CTLCH)
+			  {
+			    // Abort processing on non META or CTLCH command //
+		    	    protoflags &= ~PF_WOPT;
+		    	    newwind = 0;
+		    	    if (displays[windnum])
+		    	      displays[windnum] -> showtitle ();
+		    	    status ();
+			  }
+		      }
+		     else if (ch >= ' ' && ch < 0x7F && displays[windnum])
+		      displays[windnum] -> addtitle (ch);
+		    if (ch == IAC)	// Determine if a UW command follows.
+		      previac = 1;
+		     else
+		      previac = 0;
+		  }
+		break;
+    } /* switch */
+  windnum = WMASK(newwind);
+  if (optflag == OPT_INQUIRE)
+    {
+      // Process option inquiries: most of these are dummies to simulate //
+      // the behaviour of the Macintosh client program.			 //
+      optflag = OPT_CMD;
+      if ((newwind >> 6) == WOC_DO && optnum != WOG_SIZE &&
+          optnum != WOTTY_SIZE && optnum != WOG_TYPE)
+	return;	// Ignore the "do" inquiry unless a size/termtype request.
+      switch (optnum)
+        {
+	  case WOG_VIS:
+	  		// Pretend the visibility is on always //
+	  		option (windnum,WOC_SET,WOG_VIS);
+			optarg (1,0);
+			transmit (0);
+			break;
+	  case WOG_TYPE:
+	  		// Send the window type to the remote host //
+			option (windnum,WOC_INQUIRE,WOG_TYPE);
+			transmit (0);
+			option (windnum,WOC_SET,WOG_TYPE);
+			if (clients[windnum])
+			  optarg (clients[windnum] -> termtype,0);
+			 else
+			  optarg (UWT_ADM31,0);
+			transmit (0);
+			break;
+	  case WOG_POS:
+	  		// Pretend the window position is (0,0) //
+			option (windnum,WOC_SET,WOG_POS);
+			optarg (0,1);
+			optarg (0,1);
+			transmit (0);
+			break;
+	  case WOG_TITLE:
+	  		// Send the window title to the remote host //
+			option (windnum,WOC_SET,WOG_TITLE);
+			char *title = displays[windnum] -> wtitle ();
+			while (*title)
+			  transmit (*title++);
+			transmit (0);	// Terminate string.
+			transmit (0);	// Terminate options.
+			break;
+	  case WOG_SIZE:
+	  		// Get the size (in pixels) of the window //
+			if (!displays[windnum])
+			  break;
+			option (windnum,WOC_SET,WOG_SIZE);
+#ifdef	UWPC_DOS
+			// Under DOS - make a dummy size in pixels //
+	  		optarg (displays[windnum] -> height * 8,1);
+	  		optarg (displays[windnum] -> width * 8,1);
+#else	/* UWPC_DOS */
+			// Under Windows - get the real window size //
+			RECT rect;
+			GetClientRect (displays[windnum] -> hWnd,&rect);
+			optarg (rect.bottom - rect.top,1);
+			optarg (rect.right - rect.left,1);
+#endif	/* UWPC_DOS */
+			transmit (0);
+			break;
+	  case WOTTY_SIZE:
+	  		// Get the size (in characters) of the window //
+			if (!displays[windnum])
+			  break;
+			option (windnum,WOC_SET,WOTTY_SIZE);
+	  		optarg (displays[windnum] -> height,1);
+	  		optarg (displays[windnum] -> width,1);
+			transmit (0);
+			break;
+	  case WOTTY_FONTSZ:
+	  		// Get the size of the font in the window //
+			option (windnum,WOC_SET,WOTTY_FONTSZ);
+			optarg (0,0);	// Specify a dummy "small" font.
+			transmit (0);
+			break;
+	  case WOTTY_MOUSE:
+	  		// Get the mouse event encoding flag //
+			option (windnum,WOC_SET,WOTTY_MOUSE);
+			optarg (0,0);	// Mouse events aren't being encoded.
+			transmit (0);
+			break;
+	  case WOTTY_BELL:
+	  		// Get the bell method flag //
+			option (windnum,WOC_SET,WOTTY_BELL);
+			optarg (2,0);	// Only audible bells supported.
+			transmit (0);
+			break;
+	  case WOTTY_CURSOR:
+	  		// Get the cursor type //
+			option (windnum,WOC_SET,WOTTY_CURSOR);
+			if (UWConfig.CursorSize != CURS_FULL_HEIGHT)
+			  optarg (1,0);	// Non-block cursor.
+			 else
+			  optarg (0,0);	// Block cursor.
+			transmit (0);
+			break;
+	  default:	break;
+	} /* switch */
+    } /* then */
+   else if (optflag == OPT_SET)
+    {
+      // Set things up to skip the characters in an option setting command //
+      optflag = OPT_CMD;
+      switch (optnum)
+        {
+	  case WOG_VIS: case WOG_TYPE: case WOTTY_FONTSZ: case WOTTY_MOUSE:
+	  case WOTTY_BELL: case WOTTY_CURSOR:
+	  	optflag = OPT_SKIP_1; break;
+	  case WOG_TITLE:
+	  	if (displays[windnum])
+		  displays[windnum] -> clrtitle ();
+	  	previac = 0;
+	  	optflag = OPT_SKIP_STR;
+		break;
+	  case WOG_POS: case WOG_SIZE: case WOTTY_SIZE:
+	  	optflag = OPT_SKIP_4; break;
+	} /* switch */
+    } /* then */
+} // UWProtocol::procoptions //
 
 // Send a character to the remote host in the
 // round-robin service window.  This is called by
@@ -132,55 +445,93 @@ void	UWProtocol::remote (int ch)
 {
   if (clients[OutputWindow])
     {
+      if (OutputWindow != CurrWindow &&
+          !(clients[OutputWindow] -> recvchars))
+        {
+	  // Update the status line to indicate characters in the window //
+	  clients[OutputWindow] -> recvchars = 1;
+	  status ();
+	} /* if */
       RoundWindow = OutputWindow;
       clients[OutputWindow] -> remote (ch);
+      if (clients[OutputWindow] -> firstch)
+        {
+	  // Send the terminal type once the first character received //
+	  clients[OutputWindow] -> firstch = 0;
+          switch (UWConfig.ShellKind)
+            {
+	      case SHELL_NONE:	 break;
+	      case SHELL_BOURNE: startclient ('t'); break;
+	      case SHELL_CSHELL: startclient ('u'); break;
+	      case SHELL_STRING: sendstring (UWConfig.ShellString); break;
+	      default:		 break;
+	    } /* switch */
+	} /* if */
     }
 } // UWProtocol::remote //
 
-extern	int	DebugMode;
-extern	FILE	*DebugFile;
-
-// Process a character incoming from the host
+// Process a character incoming from the host.  Note: protoflags
+// is copied into the register variable flags to help increase the
+// speed of checking the heaps of flags in this function.  Previously
+// the routine was spending lots of time doing unnecessary object
+// dereferences to get simple flags.
 void	UWProtocol::fromhost (int ch)
 {
+  register int flags;
   int arg,temp,windtype;
+  flags = protoflags;		// Get the current flag settings.
   if (DebugMode)
     fputc (ch,DebugFile);	// Save character in the debugging file.
-  if (protocol > 0 || (UWConfig.StripHighBit && !dirproc))
+  // if (protocol > 0 || (UWConfig.StripHighBit && !dirproc))
+  if (protocol > 0 || ((flags & PF_STRIP) && !(flags & PF_DIRECT)))
     ch &= 0x7F;		// Strip unwanted parity bit.
    else
     ch &= 0xFF;		// Make a little more 8-bit clean.
-  if (getpcl)
+  // if (getpcl)
+  if (flags & PF_PNEG)
     {
       // Process the character for a protocol negotiation //
       int proto;
       proto = ch - ' ' + 1;		// Get protocol number from remote
-      if (proto != 1)			// Check for a Protocol 1 suggestion
+      if (flags & PF_NEGSET)		// Set the protocol if forced to
+        protocol = proto;		// by the server.
+       else if (proto > UWConfig.MaxProtocol) // Need a supported protocol.
         {
-	  // Cancel the server's suggested protocol and suggest Protocol 1 //
+	  // Cancel the server's suggested protocol and suggest another //
 	  command (P1_FN_MAINT | P1_MF_CANPCL);
-	  transmit (' ');
+	  transmit (UWConfig.MaxProtocol - 1 + ' ');
 	}
-       else if (getpcl == P1_MF_CANPCL)	// If a Protocol 1 suggestion, set it
+       else if (flags & PF_NEGCAN)	// If a supported protocol set it.
         {
-	  // Protocol is acceptable - tell server to set it //
+	  // Protocol is acceptable - tell the server to set it //
 	  command (P1_FN_MAINT | P1_MF_SETPCL);
-	  transmit (' ');
+	  transmit (proto - 1 + ' ');
+	  protocol = proto;		// Set the new protocol to be used.
 	}
-      getpcl = 0;
+      // getpcl = 0;
+      protoflags &= ~(PF_PNEG | PF_NEGCAN | PF_NEGSET);
       return;				// Exit - character processed
     }
-  if (gotiac)
+  // if (gotiac)
+  if (flags & (PF_IAC | PF_WTYPE | PF_WOPT))
     {
       int windtype;
-      if (newwind)
+      // if (newwind)
+      if (flags & PF_WTYPE)
         {
 	  // Get the window type character for a
 	  // window creation in Protocol 2.			
-	  windtype = ch;
-	  ch = P1_DIR_HTOC | P1_FN_NEWW;
-	} /* if */
-      gotiac = 0;
+	  windtype = ch - ' ';
+	  ch = P1_DIR_HTOC | P1_FN_NEWW | newwind;
+	} /* then */
+       else if (flags & PF_WOPT)
+        {
+	  // Process an option character for a window //
+	  procoptions (ch);
+	  return;
+	} /* then */
+      // gotiac = 0;
+      protoflags &= ~(PF_IAC | PF_WTYPE);
       if ((ch & P1_DIR) != P1_DIR_HTOC)
         return;				// Skip command - wrong direction.
       arg = ch & P1_FN_ARG;		// Get function argument.
@@ -195,14 +546,23 @@ void	UWProtocol::fromhost (int ch)
 		    if (!newwind && arg)
 		      {
 		        newwind = arg;
-			gotiac = 2;
+			protoflags |= PF_WTYPE;
+			if (DebugMode)
+			  fputc ('?',DebugFile);
+			// gotiac = 2;
 			break;
 		      } /* then */
 		     else
 		      {
-		        windtype = ch - ' ';
+		        if (DebugMode)
+			  fputc ('/',DebugFile);
 			arg = newwind;
 			newwind = 0;
+			if (UWConfig.ObeyTerm == OBEY_IGNORE)
+			  windtype = UWT_UNKNOWN;
+			 else if (!numwinds &&
+			 	  UWConfig.ObeyTerm == OBEY_NOTFIRST)
+			  windtype = UWT_UNKNOWN;
 		      } /* else */
 		  } /* then */
 		 else
@@ -230,6 +590,9 @@ void	UWProtocol::fromhost (int ch)
           case P2_FN_WOPT:		// Process Protocol 2 window options.
 	  	if (protocol < 2)	// Ignore options in Protocol 0/1.
 		  break;
+		newwind = arg;		// Save the window number.
+		protoflags |= PF_WOPT;	// Process options on next character.
+		optflag = OPT_CMD;	// Start in the right option state.
 	  	break;
 	  case P1_FN_META:
 	  	if (protocol < 1)	// Ignore command in Protocol 0.
@@ -246,7 +609,8 @@ void	UWProtocol::fromhost (int ch)
 		      } /* switch */
 		  } /* then */
 		 else
-	  	  gotmeta = 1;		// Enable the next meta bit.
+	  	  protoflags |= PF_META;	// Enable the next meta bit.
+	  	  // gotmeta = 1;		// Enable the next meta bit.
 	  	break;
 	  case P1_FN_CTLCH:
 	  	if (protocol < 1)	// Ignore command in Protocol 0.
@@ -260,12 +624,18 @@ void	UWProtocol::fromhost (int ch)
 		  }
 		if (ch)
 		  {
-		    if (gotmeta)
+		    // if (gotmeta)
+		      // {
+		        // gotmeta = 0;
+			// ch |= 0x80;
+		      // }
+		    if (flags & PF_META)
 		      {
-		        gotmeta = 0;
-			ch |= 0x80;
+		        protoflags &= ~PF_META;
+			remote (ch | 0x80);
 		      }
-		    remote (ch);
+		     else
+		      remote (ch);
 		  }
 	  	break;
 	  case P1_FN_MAINT:
@@ -280,8 +650,11 @@ void	UWProtocol::fromhost (int ch)
 				  }
 				break;
 		    case P1_MF_CANPCL:
+		    		protoflags |= PF_PNEG | PF_NEGCAN;
+				break;
 		    case P1_MF_SETPCL:
-		    		getpcl = arg;
+		    		protoflags |= PF_PNEG | PF_NEGSET;
+		    		// getpcl = arg;
 				break;
 		    case P1_MF_EXIT:			// Exit protocol 1
 		    		protocol = -1;		// Special exit mode
@@ -293,16 +666,24 @@ void	UWProtocol::fromhost (int ch)
 	  default: break;
 	}
     }
-   else if (ch == P1_IAC && !dirproc && !UWConfig.DisableUW)
-    gotiac = 1;
+   // else if (ch == P1_IAC && !dirproc && !UWConfig.DisableUW)
+   else if (ch == P1_IAC && !(flags & (PF_DIRECT | PF_UWOFF)))
+    // gotiac = 1;
+    protoflags |= PF_IAC;
    else
     {
-      if (gotmeta)
+      // if (gotmeta)
+        // {
+	  // ch |= 0x80;		// Enable the received meta bit.
+	  // gotmeta = 0;
+	// }
+      if (flags & PF_META)
         {
-	  ch |= 0x80;		// Enable the received meta bit.
-	  gotmeta = 0;
+	  protoflags &= ~PF_META;
+	  remote (ch | 0x80);
 	}
-      remote (ch);
+       else
+        remote (ch);
     }
 } // UWProtocol::fromhost //
 
@@ -342,10 +723,12 @@ void	UWProtocol::status (void)
 	      case '\0':--sformat; break;
 	      case '%':	Buffer[posn++] = '%'; break;
 	      case 'a': startposn = posn;
+	      		int wflag=0;
   			for (window = 1;window < NUM_UW_WINDOWS;++window)
   			  {
   			    if (displays[window] != 0)
         		      {
+			        wflag = 1;
 	  			if (CurrWindow == window)
 	    			  {
 	      			    Buffer[posn++] = '\001';
@@ -355,10 +738,33 @@ void	UWProtocol::status (void)
 	    			  }
 	   			 else
 	    			  Buffer[posn++] = window + '0';
-	  			Buffer[posn++] = ' ';
+				if (clients[window] -> recvchars)
+				  Buffer[posn++] = '*';
+				 else
+	  			  Buffer[posn++] = ' ';
 			      }
     			  }
+			if (!wflag)
+			  {
+			    // Fake out the while loop into believing that
+			    // at least one window is present.
+			    Buffer[posn++] = '\001';
+			    Buffer[posn++] = '\002';
+			  }
 			while ((posn - startposn) < 16) // 14 + 2 attr chars
+			  Buffer[posn++] = ' ';
+			break;
+	      case 'c': char *title;
+	      		if (displays[CurrWindow])
+			  title = displays[CurrWindow] -> wtitle ();
+			 else
+			  title = "";
+	      		startposn = posn;
+			while (*title && posn < (STR_LEN - 1) &&
+			       (posn - startposn) < UWConfig.MaxTitleLen)
+			  Buffer[posn++] = *title++;
+			while (posn < (STR_LEN - 1) &&
+			       (posn - startposn) < UWConfig.MaxTitleLen)
 			  Buffer[posn++] = ' ';
 			break;
 	      case 'e': strcpy (Buffer + posn,TermName);
@@ -389,7 +795,9 @@ void	UWProtocol::status (void)
 	      case 'p': strcpy (Buffer + posn,UWConfig.DeviceParameters);
 	      		posn += strlen (UWConfig.DeviceParameters);
 			break;
-	      case 's': startposn = CurrentTime;	// Get current time.
+	      case 'r': Buffer[posn++] = protocol + '0';
+	      		break;
+	      case 's': startposn = CurrSystemTime ();	// Get system time.
 	      		Buffer[posn++] = (startposn / 600) + '0';
 			startposn %= 600;
 			Buffer[posn++] = (startposn / 60) + '0';
@@ -400,7 +808,7 @@ void	UWProtocol::status (void)
 			break;
 	      case 't': if (comcarrier (UWConfig.ComPort))
 	      		  {
-	      		    startposn = OnlineTime;	// Get current time.
+	      		    startposn = OnlineTime;	// Get online time.
 	      		    Buffer[posn++] = (startposn / 600) + '0';
 			    startposn %= 600;
 			    Buffer[posn++] = (startposn / 60) + '0';
@@ -451,7 +859,7 @@ void	UWProtocol::titlebar (UWClient *client)
 #ifdef	UWPC_WINDOWS
 #define	WIND_TEXT_LEN	64
   HWND hWnd;
-  char title[WIND_TEXT_LEN],*name;
+  char title[WIND_TEXT_LEN],far *name;
   int posn;
   hWnd = (client -> getwind ()) -> hWnd;
   GetWindowText (hWnd,title,WIND_TEXT_LEN);
@@ -474,7 +882,8 @@ void	UWProtocol::titlebar (UWClient *client)
 #endif	/* UWPC_WINDOWS */
 } // UWProtocol::titlebar //
 
-#define	SLICE_SIZE	5
+#define	SLICE_SIZE	8	// Must be a power of 2.
+#define	RECEIVE_SLICE	15	// This can be any value.
 
 // Start the processing of the UW protocol.  When
 // this method exits, the program has been terminated.
@@ -500,6 +909,8 @@ char	*UWProtocol::start (void)
   LastInput = 0;
   RoundWindow = 0;
   OutputWindow = 0;
+  protoflags = (UWConfig.StripHighBit ? PF_STRIP : 0) |
+  	       (UWConfig.DisableUW ? PF_UWOFF : 0);
   gotmeta = 0;
   gotiac = 0;
   getpcl = 0;
@@ -517,6 +928,7 @@ char	*UWProtocol::start (void)
     return ("Not enough memory for primary terminal");
   if (clients[0] -> isaterminal)
     ((UWTermDesc *)clients[0]) -> setemul (UWConfig.P0TermType);
+  clients[0] -> termtype = GetTermType (UWConfig.P0TermType);
   displays[0] -> top (1);
 #ifdef	UWPC_DOS
   lasttime = CurrentTime;
@@ -606,9 +1018,35 @@ char	*UWProtocol::start (void)
 	}
 #endif	/* UWPC_DOS */
 
-      // Process characters received from the remote host //
+      // Process characters received from the remote host.  //
+      // The looping until the time-slice is up is designed //
+      // to give better performance when lots of characters //
+      // are being received at once.			    //
       if ((ch = comreceive (UWConfig.ComPort)) >= 0)
-	fromhost (ch);
+        {
+	  fromhost (ch);
+	  if ((ch = comreceive (UWConfig.ComPort)) >= 0)
+	    {
+#ifdef	UWPC_WINDOWS
+	      // Suspend the character redrawing to get some speed //
+	      int wind = CurrWindow;
+	      if (displays[wind])
+	        displays[wind] -> suspend (1);
+#endif
+              int recslice = 0;
+	      do
+	        {
+		  fromhost (ch);
+		}
+              while (++recslice < RECEIVE_SLICE &&
+      	             (ch = comreceive (UWConfig.ComPort)) >= 0);
+#ifdef	UWPC_WINDOWS
+	      // Turn the character redrawing back on //
+	      if (displays[wind])
+	        displays[wind] -> suspend (0);
+#endif
+	    } /* if */
+	} /* if */
 
 #ifdef	UWPC_DOS
       // Under Windows 3.0, the keyboard and mouse events come   //
@@ -637,7 +1075,7 @@ char	*UWProtocol::start (void)
 	}
 #endif	/* UWPC_DOS */
 
-      if (!(slice = (slice + 1) % SLICE_SIZE))
+      if (!(slice = ((slice + 1) & (SLICE_SIZE - 1))))
         {
           // Send a "tick" to every currently active window //
           for (window = 0;window < NUM_UW_WINDOWS;++window)
@@ -671,7 +1109,11 @@ char	*UWProtocol::start (void)
             break;		// The application has terminated.
           if (!TranslateAccelerator (hMainWnd,hAccTable,&msg))
             {
-	      TranslateMessage (&msg);
+	      // Don't translate the BS key, because we don't want it
+	      // to be processed twice in the handling for WM_KEYDOWN
+	      // and WM_CHAR.
+	      if (msg.message != WM_KEYDOWN || msg.wParam != VK_BACK)
+	        TranslateMessage (&msg);
 	      DispatchMessage (&msg);
 	    }
 	} /* if */
@@ -725,7 +1167,10 @@ void	UWProtocol::timer (void)
 // is only called in the Windows 3.0 version.
 void	UWProtocol::mouse (int wind,int x,int y,int buttons)
 {
+  int oldwind = RoundWindow;
+  RoundWindow = wind;
   clients[wind] -> mouse (x,y,buttons);
+  RoundWindow = oldwind;
 } // UWProtocol::mouse //
 
 // Force the exit from Protocol 1 or higher, and a
@@ -750,14 +1195,15 @@ void	UWProtocol::exit (void)
 #ifdef	UWPC_WINDOWS
   // Disable the Protocol 1 specific menu items //
   HMENU hMenu;
-  extern HWND hMainWnd;
-  hMenu = GetMenu (hMainWnd);
+  hMenu = GetMenu (displays[0] -> hWnd);
   EnableMenuItem (hMenu,IDM_EXIT,MF_GRAYED);
   EnableMenuItem (hMenu,IDM_NEW,MF_GRAYED);
   EnableMenuItem (hMenu,IDM_KILL,MF_GRAYED);
   EnableMenuItem (hMenu,IDM_NEXTWIN,MF_GRAYED);
   EnableMenuItem (hMenu,IDM_MINALL,MF_GRAYED);
   EnableMenuItem (hMenu,IDM_START,MF_ENABLED);
+  EnableMenuItem (hMenu,IDM_HANGUP,MF_ENABLED);
+  EnableMenuItem (hMenu,IDM_BREAK,MF_ENABLED);
 #endif	/* UWPC_WINDOWS */
 } // UWProtocol::exit //
 
@@ -793,8 +1239,19 @@ int	UWProtocol::create (int number,int windtype)
       displays[number] = 0;
       return (0);
     }
+  unsigned char far *emul;
+  if (protocol < 2 || windtype == UWT_UNKNOWN || windtype == UWT_NOTUW)
+    {
+      windtype = GetTermType (UWConfig.P1TermType);
+      emul = UWConfig.P1TermType;
+    }
+   else if ((emul = UWConfig.getterminal (windtype)) == NULL)
+    emul = UWConfig.P1TermType;
+  if (windtype == UWT_UNKNOWN || windtype == UWT_NOTUW)
+    windtype = UWT_ADM31;
+  clients[number] -> termtype = windtype;
   if (clients[number] -> isaterminal)
-    ((UWTermDesc *)clients[number]) -> setemul (UWConfig.P1TermType);
+    ((UWTermDesc *)clients[number]) -> setemul (emul);
   if (numwinds == 0)		// If this is the first window in Protocol 1
     {				// then display it at the top.
       top (number);
@@ -805,20 +1262,33 @@ int	UWProtocol::create (int number,int windtype)
 
       // Enable the Protocol 1 specific menu items //
       HMENU hMenu;
-      extern HWND hMainWnd;
-      hMenu = GetMenu (hMainWnd);
+      hMenu = GetMenu (displays[0] -> hWnd);
       EnableMenuItem (hMenu,IDM_EXIT,MF_ENABLED);
       EnableMenuItem (hMenu,IDM_NEW,MF_ENABLED);
       EnableMenuItem (hMenu,IDM_KILL,MF_ENABLED);
       EnableMenuItem (hMenu,IDM_NEXTWIN,MF_ENABLED);
       EnableMenuItem (hMenu,IDM_MINALL,MF_ENABLED);
       EnableMenuItem (hMenu,IDM_START,MF_GRAYED);
+      EnableMenuItem (hMenu,IDM_HANGUP,MF_GRAYED);
+      EnableMenuItem (hMenu,IDM_BREAK,MF_GRAYED);
 #endif	/* UWPC_WINDOWS */
     } /* if */
   ++numwinds;
   status ();			// Redraw the status line.
   if (docreate)
-    command (P1_FN_NEWW | number); // Send a create command to remote host.
+    {
+      command (P1_FN_NEWW | number); // Send a create command to remote host.
+      if (protocol > 1)
+        {
+	  transmit (windtype + ' '); // Send the window type in Protocol 2.
+	  option (number,WOC_SET,WOTTY_SIZE); // Set the window size.
+	  optarg (displays[number] -> height,1);
+	  optarg (displays[number] -> width,1);
+	  transmit (0);
+	} /* if */
+      if (UWConfig.ShellKind != SHELL_NONE)
+        clients[number] -> firstch = 1;	// Request terminal type to be sent.
+    } /* if */
   return (number);		// Window successfully created.
 } // UWProtocol::create //
 
@@ -849,7 +1319,13 @@ void	UWProtocol::remove (void)
 void	UWProtocol::direct (int on)
 {
   if (protocol == 0)
-    dirproc = on;
+    {
+      dirproc = on;
+      if (on)
+        protoflags |= PF_DIRECT;
+       else
+        protoflags &= ~PF_DIRECT;
+    } /* if */
 } // UWProtocol::direct //
 
 // Kill a particular window.  Once all Protocol 1 or 2
@@ -880,6 +1356,12 @@ void	UWProtocol::kill (int number)
   --numwinds;
   if (protocol < 0)		// Ignore rest if quick exit wanted.
     return;
+  if (number != CurrWindow)	// Only bring a new one to the top if we
+    {				// have killed the current one.
+      LastInput = 0;
+      status ();
+      return;
+    }
   number = 1;			// Search for a new top window on a normal kill
   while (number < NUM_UW_WINDOWS && clients[number] == 0)
     ++number;
@@ -887,6 +1369,7 @@ void	UWProtocol::kill (int number)
     {
       top (number);		// Set a new top window.
       CurrWindow = number;
+      LastInput = 0;		// Force an input window change.
     }
    else
     exit ();			// Last destroyed - exit protocol.
@@ -902,6 +1385,7 @@ void	UWProtocol::top (int number)
     displays[CurrWindow] -> top (0);	// Remove current window from top.
   CurrWindow = number;
   displays[CurrWindow] -> top (1);	// Make the new current window the top.
+  clients[CurrWindow] -> recvchars = 0;	// Indicate no received characters.
   status ();				// Redraw the status line.
 } // UWProtocol::top //
 
@@ -939,8 +1423,7 @@ void	UWProtocol::jumpdos (char *cmdline)
 void	UWProtocol::hangup (void)
 {
   if (protocol > 0)			// Exit protocol 1 if necessary.
-    protocol = -2;
-  exit ();
+    exitmulti = 1;
   comdropdtr (UWConfig.ComPort);	// Drop the COM port's DTR signal
   DELAY_FUNC (100);			// Wait for 100 ms before raising
   comraisedtr (UWConfig.ComPort);	// Raise the DTR signal again
@@ -952,6 +1435,7 @@ void	UWProtocol::hangup (void)
 // Modem control strings include initialisation, hangup, etc.
 void	UWProtocol::sendstring (char *str)
 {
+  void	sttysendlower (char far *str);
 #ifdef	UWPC_WINDOWS
   extern HCURSOR hHourGlass;
   HCURSOR hCursor;
@@ -968,7 +1452,9 @@ void	UWProtocol::sendstring (char *str)
 	}
        else if (*str == '#')
         {
-	  if (*(str + 1))
+	  if (*(str + 1) == '?')	// Check for terminal type request.
+	    sttysendlower (clients[RoundWindow] -> name ());
+	   else if (*(str + 1))
 	    send (*(++str));		// Send following character direct.
 	}
        else
@@ -984,8 +1470,7 @@ void	UWProtocol::sendstring (char *str)
 void	UWProtocol::sendbreak (void)
 {
   if (protocol > 0)			// Exit protocol 1 if necessary.
-    protocol = -2;
-  exit ();
+    exitmulti = 1;
   combreak (UWConfig.ComPort,1);	// Turn on the BREAK signal.
   DELAY_FUNC (500);			// Wait for 500ms for the pulse.
   combreak (UWConfig.ComPort,0);	// Turn off the BREAK signal.

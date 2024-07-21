@@ -3,7 +3,7 @@
   OPCODES.H - Opcodes for the Termcap Compiler's abstract machine.
  
     This file is part of the Termcap Compiler and UW/PC source code.
-    Copyright (C) 1990-1991  Rhys Weatherley
+    Copyright (C) 1990-1992  Rhys Weatherley
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -39,14 +39,22 @@
  * between 0x100 and this number will be accepted.  This should roughly
  * correspond to the current version of TERMCC.
  */
-#define	UW_TERM_VERSION		0x102
+#define	UW_TERM_VERSION		0x104
+
+/*
+ * Define the version number where the terminal type codes started.
+ * These type codes are used in Protocol 2 to request a particular
+ * kind of terminal.  See the TERMCC documentation for values.
+ */
+#define	UW_TERM_TYPECODE_VERS	0x103
 
 /*
  * Define the size of the terminal description header.  This is the
  * offset to find the name of the terminal emulation and the base
  * of the jump labels.
  */
-#define	TERM_HEADER_SIZE	6
+#define	TERM_OLD_HEADER_SIZE	6	/* pre-1.03 header size */
+#define	TERM_HEADER_SIZE	7
 
 /*
  * Define the opcodes that can appear in a Termcap program.  To
@@ -67,7 +75,13 @@ enum   TermcapOpcodes {
 	OP_SCRLUP,OP_SCRLDN,OP_SET,OP_RESET,OP_TEST,OP_RESARR,OP_GETARG,
 	OP_GETA,OP_DEC,OP_SHIFT,OP_SETC,OP_SAVEATTR,OP_RESTATTR,
 	OP_INSBLANK,OP_CLIENT,OP_KEYTAB,OP_KEYTAB_NONE,OP_TABND,
-	OP_REVLF
+	OP_REVLF,OP_SWITCH_DIGIT,OP_MOVED,OP_MOVEL,OP_MOVER,OP_MOVEU,
+	OP_MOVEREL,OP_MOVEH,OP_CLRMAP,OP_MAP,OP_GETA_WIDTH,OP_GETA_HEIGHT,
+	OP_REGION,OP_REMSTR,OP_REMNUM,OP_SETTAB,OP_RESTAB,OP_CLRTABS,
+	OP_SETFORE,OP_SETBACK,OP_SENDG,OP_SENDG52,OP_SENDGI,OP_SENDGI52,
+	OP_CLRRGN,OP_COPYATTR,OP_SETBOLD,OP_SETBOLDOFF,OP_SETBLINK,
+	OP_SETBLINKOFF,OP_DEFTABS,OP_SENDGS,OP_SENDGSI,OP_ADDTITLE,
+	OP_CLRTITLE,OP_SHOWTITLE,OP_DIRECT,OP_NODIRECT,OP_ALIGN
 };
 
 #endif	/* __OPCODES_H__ */

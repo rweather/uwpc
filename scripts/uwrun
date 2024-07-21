@@ -1,0 +1,133 @@
+#!/bin/sh
+#
+# uwrun - A shell script for running programs in UW windows after fixing the
+#	  terminal type and TERMCAP variable.
+#
+# Note: This script contains an escape character, so be careful when
+#	viewing it.
+#
+# Usage: uwrun [-s] [-wtype] [-blines] [-p] [-h] [-] [command [arg ...]]
+#
+#	-s	Sleep for 5 seconds after command execution.  This is required
+#		for some programs so UW/PC doesn't cause the whole uw session
+#		to be aborted prematurely during startup.  You should supply
+#		this in .uwrc for programs that may fail at startup (e.g.
+#		newsreaders that exit straight away if there is no news).
+#
+#	-w	Specify the new terminal type to use in the window.
+#		If not specified, then the UWTERM environment variable
+#		is used.  Or if it is not present, then TERM is used.
+#		If the type is "vtansi", then the type is synthesised
+#		from the vt100 TERMCAP entry to get better capabilities.
+#
+#	-blines	Set the number of lines in the scroll-back buffer for the
+#		window.
+#
+#	-p	Send a "pop-up sequence" to UW/PC.  This is a special
+#		sequence of characters that tells UW/PC to bring the nominated
+#		window to the top and make it the current window.  This is
+#		useful for creating windows that pop straight up for use.
+#		The "uwvi" script uses this option.  You may need to edit
+#		the "ECHO" variable below to point to an echo command that
+#		understands the "-n" option.
+#
+#	-h	Halt after execution of the command finishes, waiting until the
+#		user presses RETURN.  This mainly for use with jobs that will
+#		run to completion unattended with some output, and you wish to
+#		examine the output before the window disappears.
+#
+#	-	A separator that can be used between the uwrun options and
+#		the command name and options.
+#
+#	If the command is not supplied, it defaults to $SHELL.
+#
+# Examples: uwrun -wansi
+#	    uwrun -s -wvtansi nn
+#	    uwtool -wansi -t"vi foo" uwrun -wvtansi -p vi foo
+#
+
+# See if we need to sleep after execution.
+if [ "$1" = "-s" ]; then
+  EXEC=
+  shift
+else
+  EXEC=exec
+fi
+
+# Get the terminal type to be used.
+case $1 in
+  -w*) UWTERM=`expr substr "$1" 3 100`
+       shift;;
+    *) if [ -z "$UWTERM" ]; then
+	 UWTERM="$TERM"
+       fi;;
+esac
+
+# Test if we need to modify the number of scroll-back lines.
+# Note: this MUST be an echo, and not an echo -n.
+case $1 in
+  -b*) echo '|S'`expr substr "$1" 3 100`
+       shift;;
+    *) ;;
+esac
+
+# Test if we should pop the window up to the top.
+ECHO=/bin/echo
+if [ "$1" = "-p" ]; then
+  UWPOPUP=yes
+  shift
+else
+  UWPOPUP=no
+fi
+
+# Determine if we should halt after command execution.
+case $1 in
+  -h)	UWHALT=yes
+  	EXEC=
+	shift;;
+   *)	UWHALT=no
+esac
+
+# Set the TERM and TERMCAP variables to the right values.
+TERM="$UWTERM" export TERM
+case $TERM in
+  adm31) TERMCAP='adm31:cr=^M:do=^J:nl=^J:al=\EE:am:le=^H:bs:ce=\ET:cm=\E=%+ %+ :cl=^Z:cd=\EY:co#80:dc=\EW:dl=\ER:ei=\Er:ho=^^:im=\Eq:li#24:mi:nd=^L:up=^K:MT:km:so=\EG1:se=\EG0:kd=^J:kl=^H:kr=^L:ku=^K:k0=^A0\r:k1=^A1\r:k2=^A2\r:k3=^A3\r:k4=^A4\r:k5=^A5\r:k6=^A6\r:k7=^A7\r:k8=^A8\r:k9=^A9\r:kh=^^:'
+         export TERMCAP ;;
+  ansi)	TERMCAP='ansi:am:bs:pt:co#80:li#24:kn#3:AL=\E[%dL:DL=\E[%dM:DO=\E[%dB:IC=\E[%d@:LE=\E[%dD:RI=\E[%dC:UP=\E[%dA:al=\E[L:bt=\E[Z:cd=\E[J:ce=\E[K:cl=\E[H\E[J:cm=\E[%i%d;%dH:ct=\E[2g:dc=\E[P:dl=\E[M:ho=\E[H:ic=\E[@:kb=\b:kd=\E[B:kh=\E[H:kl=\E[D:kr=\E[C:ku=\E[A:nd=\E[C:se=\E[m:so=\E[7m:st=\EH:ue=\E[m:up=\E[A:us=\E[4m:k1=\EOP:k2=\EOQ:k3=\EOR:k4=\EOS:'
+        export TERMCAP ;;
+  vtansi) TERM=ansi export TERM
+	TERMCAP='ansi:am:@xn:ku=\E[A:kd=\E[B:kr=\E[C:kl=\E[D:kh=\E[H:tc=vt100'
+	export TERMCAP ;;
+  *) ;;
+esac
+
+# Pop the window up to the top if requested.  There is an
+# escape character below, so be careful!
+if [ "$UWPOPUP" = "yes" ]; then
+  $ECHO -n '|P'
+fi
+unset UWPOPUP
+
+# Skip the "-" separator if necessary.
+if [ "$1" = "-" ]; then
+  shift
+fi
+
+# Now execute the required program.  The "sh -c" on the
+# shell call seems to tell the Korn shell (ksh) not to
+# print its copyright banner.  Why this should be remains
+# a mystery to me.
+if [ -z "$1" ]; then
+  $EXEC sh -c $SHELL
+else
+  $EXEC $*
+fi
+
+# Determine if we need to halt or delay after command execution.
+if [ "$UWHALT" = "yes" ]; then
+  $ECHO -n '[Press RETURN to continue]'
+  read LINE
+else
+  sleep 5
+fi
+exit 0

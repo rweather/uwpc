@@ -26,6 +26,7 @@
 //  -------  --------  --  --------------------------------------
 //    1.0    23/03/91  RW  Original Version of CONFIG.H
 //    1.1    08/12/91  RW  Add international language support.
+//    1.2    05/04/92  RW  Add dialing directory.
 //
 //-------------------------------------------------------------------------
 
@@ -43,6 +44,21 @@
 #define	STATUS_CENTRE_SQUASH	5
 
 //
+// Define the values for UWConfig.ObeyTerm.
+//
+#define	OBEY_IGNORE		0
+#define	OBEY_ALWAYS		1
+#define	OBEY_NOTFIRST		2
+
+//
+// Define the shell kinds for the "fixterm" option.
+//
+#define	SHELL_NONE		0
+#define	SHELL_BOURNE		1
+#define	SHELL_CSHELL		2
+#define	SHELL_STRING		3
+
+//
 // Define the configuration class.  All configuration information
 // for UW/PC is stored in the object "UWConfig" of this class.
 //
@@ -50,6 +66,8 @@
 #define	MAX_DESCS	5
 #define	FONT_STR_LEN	16
 #define	MAX_CHARS	256
+#define	NUM_DIAL_STRINGS 20
+#define	DIAL_STR_LEN	51
 class	UWConfiguration {
 
 private:
@@ -72,6 +90,10 @@ private:
 	// Returns NULL if the terminal type could not be found.
 	unsigned char far *FindTerminal (char *type);
 
+	// Parse a dialing directory comms parameter spec.  Returns
+	// -1 if the string was illegal (it also generates an error msg).
+	int	parsecom (char *str);
+
 	// Process a configuration line.
 	void	processline (char *line);
 
@@ -81,6 +103,8 @@ public:
 	int	ComParams;		// Communication parameters.
 	int	ComCtsRts;		// Non-zero for CTS/RTS handshaking.
 	int	ComFossil;		// Non-zero to use a FOSSIL driver.
+	int	ComEstBaud;		// Baud rate estimation for DSZ.
+	int	ComDirect;		// Non-zero for a direct serial line.
 	int	StripHighBit;		// Non-zero for high bit strip.
 	char	DeviceParameters[16];	// String description of ComParams.
 	int	DisableStatusLine;	// Non-zero to disable status line.
@@ -92,13 +116,18 @@ public:
 	int	XonXoffFlag;		// Non-zero for encoded XON/XOFF.
 	int	BeepEnable;		// Non-zero to enable beep.
 	int	SwapBSKeys;		// Non-zero to swap DEL and BS.
-	char	DialString[STR_LEN];	// String to send for dial.
+	char	DialString[DIAL_STR_LEN]; // String to send for dial.
+	char	DialPrefix[DIAL_STR_LEN]; // Prefix for dialing a number.
+	char	DialSuffix[DIAL_STR_LEN]; // Suffix for dialing a number.
+	char	DialNumber[NUM_DIAL_STRINGS][DIAL_STR_LEN]; // Dialing dir.
+	int	DialParams[NUM_DIAL_STRINGS]; // New comms parameters in dir.
 	char	CommandString[STR_LEN];	// String to send for "uw" command.
 	char	FKeys[10][STR_LEN];	// Function key definitions.
 	char	StatusFormat[STR_LEN];	// Format of the status line.
 	int	StatusPosn;		// Position of the status line.
 	char	FtpString[STR_LEN];	// String to send for "uwftp" command.
 	void	*TermDescs[MAX_DESCS];	// New terminal descriptions.
+	char	TermFiles[MAX_DESCS][STR_LEN]; // Filenames of descriptions.
 	int	NumTermDescs;		// Number of new descriptions.
 	unsigned char NewAttrs[5];	// The new screen attributes.
 	int	PopUpNewWindow;		// Non-zero to pop-up new windows.
@@ -115,10 +144,31 @@ public:
 	char	KeyTransTable[MAX_CHARS]; // Table to translate keys.
 	char	PrintTransTable[MAX_CHARS]; // Translation table for printing.
 	char	TransFile[STR_LEN];	// Name of translation table file.
+	int	NewTransFile;		// Non-zero if not default trans file.
+	char	Language[STR_LEN];	// Foreign language being used.
+	int	BigVideo;		// Non-zero for 43/50 line mode.
+	int	BellFreq;		// Frequency of the terminal bell.
+	int	BellDur;		// Duration of the terminal bell (ms).
+	int	AnsiBright;		// Non-zero for bright ANSI colours.
+	int	ObeyTerm;		// Terminal override mode.
+	int	MaxProtocol;		// Maximum multi-window protocol.
+	int	MaxTitleLen;		// Maximum displayed title length.
+	int	ShellKind;		// Kind of shell for "fixterm" option.
+	char	ShellString[STR_LEN];	// String for ShellKind==SHELL_STRING.
 
 	UWConfiguration (void);		// Set the defaults.
 
 	int	doconfig (char *argv0);	// Do the configuration.
+
+	// Process ComParams and create the DeviceParameters string.
+	void	makeparams (void);
+
+	// Get a terminal emulation for a particular terminal type.
+	unsigned char far *getterminal (int termtype);
+
+	// Dump the configuration settings out to UW.CFG.  The old
+	// configuration file is saved in UWCFG.OLD.
+	int	dumpconfig (char *argv0);
 
 };
 

@@ -36,10 +36,22 @@ the DOS versions because of the complexity of the windowing code that is
 necessary.
 
 This version of UW/PC introduces support for FOSSIL drivers to improve
-communications performance on high speed modems.  See the "fossil" and
+communications performance at high modem speeds.  See the "fossil" and
 "ctsrts" options in the "CONFIGURING UW/PC" section below for more details.
 The FOSSIL driver must be installed before running UW/PC.  FOSSIL drivers
-are available from many FTP sites and BBSes.
+are available from many FTP sites and BBSes.  If a FOSSIL driver is not used,
+then it is possible that some characters may be lost at high modem speeds
+using UW/PC's built-in communications driver which can't keep up or do
+CTS/RTS handshaking.  As a general guide, UW/PC can happily handle up to
+2400 baud without the need for a FOSSIL driver.  I use the BNU FOSSIL driver,
+and haven't had any problems with it when used with UW/PC.
+
+When running the DOS version of UW/PC under Windows 3.0 at high modem speeds,
+it is sometimes better to run it full-screen rather than in a window.  This
+is because the window updating done by Windows 3.0 can totally kill the
+performance of UW/PC when receiving lots of characters at once.  Many code
+optimisations have been done on UW/PC, but running it in a window still
+remains a problem.
 
 There are now many more configuration options, so even if you have used UW/PC
 before, I suggest that you read the section "CONFIGURING UW/PC" later in this
@@ -67,20 +79,49 @@ suggestions about it should be sent to Russ.
 
 2. FILES
 
-The following files should be present in the UW/PC distribution:
+Unlike versions of UW/PC prior to version 2.02, this version comes in three (3)
+separate ZIP files:
 
+	UWPC202E.ZIP	The executable programs for UW/PC.
+	UWPC202S.ZIP	The full source code for UW/PC.
+	UWPCSERV.ZIP	Source code for the Unix server.
+
+This split was done because the size of the single ZIP file was getting too
+large, and some people already have the server, or aren't interested in the
+source code.  If you don't wish to inspect the source, then you only require
+the first and third ZIP files, and if you already have the server compiled,
+then you only need the first ZIP file.
+
+The following files should be present in the UW/PC distribution ZIP file
+UWPC202E.ZIP:
+
+	README		Instructions for installing UW/PC.
 	COPYING		A copy of the GNU General Public License.
-	UW.EXE		The actual UW/PC program itself.
+	UWINSTAL.EXE	An installation program for UW/PC to copy the
+			files and executables into the right place.
+	UW.EXE		The actual UW/PC program itself (for DOS).
+	UW-W.EXE	The Windows version of UW/PC.
 	UW.DOC		This documentation file.
 	UWEG.CFG	An example configuration file - rename to
 			UW.CFG to use this file.
 	UW.LNG		Translation tables for international language
 			support.  See INTERNATIONAL SUPPORT IN UW/PC
 			below for more details.
+	UWFONT.FON	A file of small fonts for the Windows version of
+			UW/PC.  This should be installed with the Windows
+			control panel.
 	TERMCC.EXE	A compiler for creating new terminal types.
 	TERMCC.DOC	Documentation for TERMCC.EXE.
-	SETMODE.COM	A useful screen mode setting utility.
+	SETMODE.EXE	A useful screen mode setting utility.
 	HISTORY		History of UW/PC versions.
+	UW-TERMS.ZIP	Contains some external .TRM terminal types.  At
+			present, VT102.TRM and AVATAR.TRM.  See the section
+			on configuration below for information on how to
+			use these terminal types.
+	SCRIPTS.TAR	Contains a bunch of useful Unix shell scripts for
+			use with the server and UW/PC.  See "UNIX WINDOWS
+			UTILITIES" below for more information.
+
 	UW-SRC.ZIP	The source code for UW/PC and TERMCC.
 	UWSERVER.TAR	The source code for the UNIX server.
 
@@ -89,6 +130,9 @@ SETMODE was included to assist with configuration of the screen colours
 from the server, and can be obtained from one of the FTP sites mentioned
 above if desired.  The source code in UWSERVER.TAR should be compiled on
 the UNIX host to allow the full multi-window potential of UW/PC to be used.
+
+Contributions and suggestions of new terminal types for the UW-TERMS.ZIP
+file are welcome.
 
 3. READ THIS IF YOU ARE HAVING TROUBLE
 
@@ -125,8 +169,11 @@ special keystrokes are defined in protocol 0:
 		See "CONFIGURING UW/PC" below.  CTRL-INSERT will also
 		perform this operation, and under Windows 3.0 ALT-C
 		does NOT (it is used for a pull-down menu).
-	ALT-D - Send the string defined by the "dial" configuration
-		variable to the modem.  See "CONFIGURING UW/PC" below.
+	ALT-D - If no dialing directory entries have been defined, then
+		the quick dialing string will be sent.  Otherwise the
+		dialing directory will be displayed, and you may select
+		a number to be dialed.  See "CONFIGURING UW/PC" below
+		for more information.
 	ALT-H - Hangup the modem, by first dropping the DTR signal,
 		and then sending the hangup string if the carrier
 		signal is still present.
@@ -181,8 +228,8 @@ and then automatically starts the multi-window session.  By default the
 server will also create a terminal window.  See the documentation that
 accompanies the server for information on modifying its startup behaviour.
 Once UW/PC has entered the multi-window session (protocol 1), up to 7
-windows can be created, ALT-U no longer has any effect, and the following
-additional special keystrokes are defined:
+windows can be created, ALT-B, ALT-H and ALT-U no longer have any effect,
+and the following additional special keystrokes are defined:
 
 	ALT-E - Exit the UW session and return to protocol 0.
 		A "kill window" request will be sent for all currently
@@ -370,16 +417,45 @@ optional, and their defaults follow:
 		is supplied.  The defaults for each of the four COM ports
 		are 0x3F8, 0x2F8, 0x3E8 and 0x2E8 respectively.
 
+	ansibright (default no)
+
+		If this option is set to yes then the ANSI colours in the ANSI,
+		VT100 and VT102 emulations will be brighter than the default.
+		The brighter colours can stand out better on some monitors.
+
 	baud (default 2400)
 
 		The baud rate to use for transmission.  This can be
 		one of 110, 150, 300, 600, 1200, 2400, 4800, 9600,
-		19200, 38400 or 57600.
+		19200, 38400, 57600 or 115200.
+
+	baudest (default is whatever "baud" is set to)
+
+		The baud rate to pass to DSZ to estimate the transfer time.
+		For some high-speed modems, you lock "baud" to a higher value
+		than the actual connect speed.  However, DSZ gets confused
+		and prints the wrong estimated transfer time.  This option
+		can be used to adjust the baud rate DSZ uses for estimations.
+		e.g. if "baud" is set to 19200 for a V.32 modem, you may
+		wish to set "baudest" to 9600.
+
+	bigvideo (default off)
+
+		If this option is set to "on", then a 43/50 line video
+		mode will be selected.
 
 	beep (default on)
 
 		Enable or disable the terminal beep.  This can be either
 		on or off.
+
+	bellfreq (default 1200)
+
+		Frequency of the terminal bell, in Hz.
+
+	belldur (default 200)
+
+		Duration of the terminal bell, in milliseconds.
 
 	bits (default 8)
 
@@ -429,7 +505,7 @@ optional, and their defaults follow:
 		Setting this to 0 will make UW/PC use the default attribute
 		which depends on the screen mode in use.
 
-	ctsrts (default is off)
+	ctsrts (default is on)
 
 		If a FOSSIL driver is enabled (see the "fossil" option below),
 		and this option is set to "on", then CTS/RTS handshaking will
@@ -446,12 +522,69 @@ optional, and their defaults follow:
 
 	dial (default "ATDT")
 
-		This string is sent to the modem when ALT-D is pressed,
-		as a shortcut for dialing.  You can modify this string to
-		contain a phone number if you wish.  e.g. "ATDP1234567^M"
-		will dial the number 1234567 using pulse dialing on a
-		Hayes compatible modem when ALT-D is pressed.  The string
-		cannot be longer than 100 characters in length.
+		This is the "quick dial" string.  If there are no dialing
+		directory entries, or 'Q' is pressed while the dialing
+		directory is popped up, then this string is send to the modem.
+		You can modify this string to contain a phone number if you
+		wish.  e.g. "ATDP1234567^M" will dial the number 1234567
+		using pulse dialing on a Hayes compatible modem when ALT-D
+		is pressed.  The string cannot be longer than 50 characters
+		in length.  If the string contains '|', then any characters
+		that follow are ignored during dialing.  They will be
+		displayed in the dialing directory as a comment.
+
+	dialnum1 (default none) ... dialnum20 (default none)
+
+		These 20 strings specify numbers in the dialing directory.
+		Each string cannot be longer than 50 characters in length.
+		When a number is dialed, the string specified by the
+		option "dialprefix" is sent, followed by the number, and
+		then followed by the string specified by the option
+		"dialsuffix".  Special modem dialing characters like ','
+		may be used in the string.  If the string contains '|',
+		then any characters that follow are intended to be a
+		comment to be displayed in the dialing directory.
+
+	dialpar1 (default none) ... dialpar20 (default none)
+
+		These 20 strings specify communications parameters for the
+		corresponding 20 numbers given by "dialnum1",...,"dialnum20",
+		that override the default parameters set by "baud", "parity",
+		"bits" and "stop" when the entry is dialed.  The strings have
+		the form "baud pbs" where "baud" is the baud rate, "p"
+		is the parity ('N', 'E', or 'O'), "b" is the number of data
+		bits (7 or 8) and "s" is the number of stop bits (1 or 2).
+		e.g. "2400 E71".  Thus, if "dialpar1" is set to "2400 E71"
+		and the number "dialnum1" is to be dialed, then the comms
+		port will be first set to 2400 baud, even parity, 7 data bits
+		and 1 stop bit before the dial.  If a string has not been
+		specified for a dialing directory entry, then no change
+		is made.
+
+	dialprefix (default "AT^M~ATDT")
+
+		This string is sent to the modem before a number when ALT-D
+		is pressed and a number is selected.  This string cannot be
+		longer than 50 characters in length.  The leading "AT^M~"
+		is for allowing the modem to get into sync with a new baud
+		rate.  Otherwise, if the baud rate is changed (by "dialparn"),
+		then the modem and computer are using different baud rates,
+		and errors in transmission of the dialing string may occur.
+		Inserting the extra "AT" brings the modem back into sync with
+		the computer's new baud rate.
+
+	dialsuffix (default "^M")
+
+		This string is sent to the modem after a number when ALT-D
+		is pressed and a number is selected.  The string cannot be
+		longer than 50 characters in length.
+
+	direct (default no)
+
+		If this option is set to "yes", then the COM port is assumed
+		to be connected to a direct serial line that doesn't have
+		modem handshaking signals.  This may be necessary for RS-232
+		cables that only have 3 lines connected.
 
 	disable (default no)
 
@@ -466,8 +599,8 @@ optional, and their defaults follow:
 
 		The default terminal emulation type to use for windows.
 		When a new window is created, it will use this emulation
-		type.  This can be one of adm31, vt52, or ansi or a string
-		(e.g. "vt102"), signifying a currently loaded terminal
+		type.  This can be one of adm31, vt52, ansi or vt100 or a
+		string (e.g. "vt102"), signifying a currently loaded terminal
 		description that will be searched for to become the
 		default emulation.  The double quotes are optional.
 		When the terminal description is searched for, case is
@@ -478,8 +611,8 @@ optional, and their defaults follow:
 		Set the terminal emulation type for protocol 0.  This is
 		to rectify some problems with UNIX termcap entries that
 		are missing the entry for ADM31 terminals, as discussed 
-		above under "USING UW/PC".  It can be one of adm31, vt52
-		or ansi or a string specifying a terminal type loaded
+		above under "USING UW/PC".  It can be one of adm31, vt52,
+		ansi or vt100 or a string specifying a terminal type loaded
 		with the "terminal" configuration option.
 
 	F1 - F10 (default undefined)
@@ -499,6 +632,28 @@ optional, and their defaults follow:
 		a function key to an empty string will also cause the
 		default behaviour to be taken.  The strings cannot be
 		longer than 100 characters in length.
+
+	fixterm (default none)
+
+		This option indicates a string to be sent to the remote host
+		when a window is created with ALT-N.  It can be a literal
+		string, or one of the values none, sh or csh (without quotes).
+		If this option is sh, then each window created will have the
+		string "TERM=xxx export TERM^M" sent to it, where "xxx" is
+		name of the current terminal type.  If this option is csh, then
+		the string sent has the form "setenv TERM xxx^M" instead.  If
+		this option is defined to a literal string, then the special
+		sequence "#?" can be used to indicate the name of the terminal
+		type.  The purpose of these strings is to set the terminal
+		type on the remote Unix host to the type in use by the UW/PC
+		window.  A useful setting is "TERM=#? export TERM^Mclear^M"
+		which will set the type and then clear the window, removing
+		the mess of the type setting commands.  For C-Shell compatible
+		shells, the string would be "setenv TERM #?^Mclear^M".  As
+		noted above, only windows created with ALT-N are affected in
+		this way.  The scripts described in the section "UNIX WINDOWS
+		UTILITIES" below provide enough support to set the correct
+		terminal type for windows created by the Unix host.
 
 	font (default "Terminal")
 
@@ -531,12 +686,17 @@ optional, and their defaults follow:
 		outside this range are either increased to 300 baud, or
 		decreased to 38400 baud.
 
-	init (default "ATZ^M~~~AT S7=45 S0=0 V1 X1^M~")
+	init (default "AT^M~ATZ^M~~~AT S7=45 S0=0 V1 X1^M~")
 
 		The modem initialisation string, delimited by double
 		quote characters.  The strings are the same as for
 		function keys, except that ALT sequences are ignored.
 		The string cannot be longer than 100 characters in length.
+		The leading "AT" is primarily to get the modem into sync
+		with the selected baud rate before sending the rest of
+		the string.  If this isn't present, then the modem sometimes
+		corrupts the initialisation string on the first startup
+		because it is using a different baud rate.
 
 	hangup (default "~~~+++~~~ATH0^M")
 
@@ -573,6 +733,20 @@ optional, and their defaults follow:
 		if you have a mouse because the mouse processing can slow
 		down UW/PC's screen updating considerably.
 
+	obeyterm (default ignore)
+
+		This option declares what should be done with the terminal
+		type of a window created by the remote host in protocol 2.
+		If it is "ignore", then windows created by the remote Unix
+		host will have their terminal types overridden by the type
+		specified by the "emul" option.  If it is "always", then
+		the terminal type specified by the remote will always be used
+		and no override will occur.  If it is "notfirst", then the
+		remote terminal type will be obeyed, except for the first
+		window created remotely which will have its type overridden.
+		This option has no effect in protocol 1 or on windows created
+		by pressing ALT-N.
+
 	parity (default none)
 
 		The parity to use for transmission.  This can be one
@@ -591,6 +765,17 @@ optional, and their defaults follow:
 		The serial port to be used for communications.  This can
 		be one of 1,2,3 or 4.
 
+	protocol (default 2)
+
+		The maximum multi-window protocol that can be used by UW/PC.
+		This option can be either 1 or 2.  If this option is 1, then
+		the enhanced facilities of protocol 2 will be disabled and the
+		server will be forced into using protocol 1.  If this option
+		is 2, then UW/PC will request the server to use protocol 2,
+		and if that is not possible, then UW/PC will default to
+		protocol 1.  If the "disable" option is set to "yes", then
+		this option has no effect.
+
 	sformat (default " ALT-Z for Help %v %e %v %p %v %u %v Windows: %a")
 
 		Set the format of the status line when it is enabled by
@@ -599,13 +784,27 @@ optional, and their defaults follow:
 		can contain "printf"-style commands to make various types
 		of information appear in the line.  When the status line
 		is displyed on the screen, it is truncated to the screen
-		width.  The commands are summarised below:
+		width.  A good status line to use for protocol 2 is
+		" %e %v Windows: %a %v %c" which displays the terminal
+		emulation, the active windows, and the title of the current
+		window.  The commands are summarised below:
 
 			%% - The character "%" itself.
 			%a - Expands to all currently active window numbers
 			     separated by spaces.  This will always occupy
 			     14 characters, padded with spaces.  The current
-			     window is highlighted.
+			     window is highlighted.  Any window that has had
+			     output arrive in it recently and isn't the
+			     current window will have a '*' following its
+			     window number.
+			%c - Title (caption) of the current window, space
+			     filled and truncated to the number of characters
+			     given by the "stlen" option.  By default, the
+			     title of the protocol 0 window is "Unix Windows"
+			     and the title of a protocol 1 (or 2) window is
+			     "N - UW/PC" where "N" is the window number.  The
+			     title may be changed by the remote host using the
+			     "uwtitle" command or a terminal escape sequence.
 			%e - Terminal type of the current window, padded
 			     to fill 5 characters with spaces.
 			%h - Turn highlighting on (alternate attribute).
@@ -616,6 +815,8 @@ optional, and their defaults follow:
 			     the current communications carrier status.
 			%p - The current serial communications parameters.
 			     e.g. "COM1 2400 N-8-1".
+			%r - The number of the current protocol: "0", "1",
+			     or "2".
 			%s - Current system time in 24-hour format (HH:MM).
 			%t - Elapsed time since logon in hours and minutes,
 			     or 5 spaces if no carrier is present.
@@ -645,6 +846,11 @@ optional, and their defaults follow:
 
 		Enable or disable the status line on the bottom of the
 		screen.  This can be either on or off.
+
+	stlen (default 30)
+
+		The maximum length of the window title displayed in the
+		status line.  This must be a number between 0 and 63 inclusive.
 
 	stop (default 1)
 
@@ -725,12 +931,10 @@ screen mode.  If the current mode is 0 (40x25 CGA mono), 2 (80x25 CGA mono)
 or 7 (80x25 MDA mono), a monochrome scheme will be chosen.  Otherwise,
 a colour scheme will be chosen.  These colours are overridden by the settings
 of the "colXXXXX" configuration options in the configuration file.  The
-utility program SETMODE.COM is provided to help out with setting screen
+utility program SETMODE.EXE is provided to help out with setting screen
 modes and the default colours.  It takes a one-character argument
-corresponding to the mode to set.  e.g. "SETMODE 3" or "SETMODE 2".
-There must only be ONE space between the command-name and the one-character
-argument, since the command is very primitive, but effective.  An 80x25
-screen mode will always be used regardless of the current screen size.
+corresponding to the mode to set.  e.g. "SETMODE 3" or "SETMODE 2".  If
+the argument to SETMODE.EXE is 64, then a 43 or 50 line mode will be chosen.
 
 8. INTERNATIONAL SUPPORT IN UW/PC.
 
@@ -739,9 +943,14 @@ mechanism.  If your language has a standard method to translate special
 non-English characters to 7-bit ASCII and back again, then you should consider
 setting up a translation table for it, and installing it with the "langfile"
 and "language" configuration options discussed above.  Currently UW/PC has
-support for Scandinavian languages via the standard language file "UW.LNG".
-If you develop a translation table for another language, then please send
-it to me via e-mail so I can include it in future releases of UW/PC.
+support for Scandinavian languages via the standard language file "UW.LNG",
+as well as a "ukascii" translation table that will translate the hash symbol
+into the IBM-PC character set pound symbol when the hash is received (could
+any UK-ASCII users out there confirm that this is right?).
+
+If you develop a translation table for another language (or fix one of my
+own), then please send it to me via e-mail so I can include it in future
+releases of UW/PC.
 
 The language file consists of zero or more translation tables.  Blank lines
 and lines that start with '#' are treated as comments.  Each translation table
@@ -778,7 +987,248 @@ Many thanks to Riku Mattila (sir@otitsun.oulu.fi) for explaining translation
 tables to me, and for prototyping Scandinavian support in a previous version
 of UW/PC.
 
-9. LIMITATIONS
+9. UNIX WINDOWS UTILITIES
+
+This section gives a quick overview of the Unix Windows utilities.  Both those
+that are distributed with the server and those in the SCRIPTS.TAR archive.
+This section also describes how to set up a ".uwrc" file to automatically
+create the windows you want when the server starts up.  The standard UW
+utilities follow.  More detailed descriptions may be found in the manual
+pages distributed with the server.
+
+	uwtool	This command creates a new window and runs a command within
+		it.  The terminal type can be overridden with the "-w" option
+		and the window's title can be set with the "-t" option.  More
+		information is available in the manual page for uwtool.  If
+		a command is not supplied on the command-line, then a shell
+		is created in the window.  Once the window has been created,
+		uwtool terminates.
+
+	uwterm	This is similar to uwtool, except that it starts a shell in
+		the newly created window.  The shell is run with a leading
+		'-', so any .profile or .login files will be run by the shell.
+		Use "uwtool $SHELL" or "uwtool sh -c $SHELL" to start a window
+		that doesn't run .profile or .login.  "sh -c" may be necessary
+		with the Korn shell (ksh) to stop it printing its copyright
+		message.  Unlike uwtool, uwterm does not terminate until the
+		shell exits, so you should use '&' when running it from .uwrc.
+
+	uwtitle	This command changes the title of the current window to the
+		string on its command-line.  A window's title may also be
+		specified using the "-t" option of uwtool and uwterm.  This
+		can be useful in shell prompts to change the title on the
+		window to the current directory whenever a "cd" is done.
+
+	uwplot	This creates a window and copies its standard input to it.
+		It is intended for use with the standard Unix plot package,
+		which is not yet supported by UW/PC, but will be once the
+		graphical extensions have been implemented.
+
+The following shell scripts are distributed with UW/PC in the file SCRIPTS.TAR.
+They are only guaranteed to work with UW/PC since they use some facilities and
+escape sequences that are unique to UW/PC.  In particular, without some
+modification, they will not work with Russ Poffenberger's UW/WIN program.  If
+these scripts are run in protocol 0 (i.e. the server is not active), then
+they will still work, although windows will not be created.
+
+	uwsize	A script to request that UW/PC should send the current size
+		of the window as an "stty rows n columns m" command.  Thus,
+		typing "uwsize" at the shell prompt will reset the size that
+		Unix thinks the window is to what UW/PC thinks it is.
+
+		Usage: uwsize
+
+	uwtype	A script to request that UW/PC should send back the current
+		terminal type as a "TERM=xxx export TERM" or "setenv TERM xxx"
+		command to the shell.  Thus, typing "uwtype" at the shell
+		prompt will reset the terminal type that Unix thinks the window
+		has to what UW/PC thinks it has.  The first form will be sent
+		back unless the SHELL environment variable indicates either
+		csh or tcsh is being used.
+
+		Usage: uwtype
+
+	uwscroll A script to change the size of the scroll-back buffer for
+		the current window.  If the number of lines is 0, then the
+		scroll-back buffer is disabled, and if no argument is given,
+		then the default number of lines is restored.
+
+		Usage: uwscroll [lines]
+
+	uwrun	A script to run a command after adjusting the TERM and TERMCAP
+		entries to something better.  Using this command together with
+		uwtool, you can avoid some of the problems with having to set
+		the TERMCAP variable as described above.  The "-b" option
+		specifies a number of lines to be kept in the created window's
+		scroll-back buffer.  e.g. "-b30" specifies that 30 lines
+		should be kept in the buffer.  If "-b" is not specified, the
+		default buffer size is used.  "-b0" may be used to turn off
+		the scroll-back buffer.  This script is more fully documented
+		by comments at the top of it.  If "termtype" is vtansi, then
+		the TERM environment variable in the window will be set to
+		"ansi", and the TERMCAP variable will be synthesized from the
+		VT100 termcap entry, which may give better capabilities.
+
+		Usage: uwrun [-s] [-wtermtype] [-blines] [-p] [cmd [arg ...]]
+
+	uwcmd	A front-end to uwtool and uwrun to run a command in a window,
+		while fixing the terminal types as necessary.  The title of
+		the window is set to the name of the command to be performed,
+		together with its arguments.  By default the window is popped
+		up to become the current window, unless the "-n" option is
+		given on the command-line.  Both uwtool and uwrun must be on
+		the user's PATH to make use of this script.  If "-0" is
+		given and the "-b" option is not given, then an implicit
+		"-b0" option is impled.  The following two forms are equivalent
+		but the second may be more convenient for scripts that call
+		this script.
+
+		Usage: uwcmd [-0] [-n] [-ttitle] [-s] [-wtermtype] [-blines]
+				[cmd [arg ...]]
+		   Or: uwcmd -ccmd [-0] [-n] [-ttitle] [-s] [-wtermtype]
+		   		[-blines] [arg ...]
+
+	uwvi	A front-end to uwcmd to run the user's editor on a list of
+		files given on the command-line.  The editor used is defined
+		by the EDITOR environment variable, or is set to "vi" if the
+		EDITOR variable does not exist.  The uwcmd script must be on
+		the user's PATH to make use of this script.  If "-b" is not
+		given, then the effect is the same as "-b0".
+
+		Usage: uwvi [-n] [-ttitle] [-wtermtype] [-blines] [file ...]
+
+	uwsh	This is similar to uwvi, except it simply creates a shell in
+		the window.  If "-b" is not given, then the default scroll-back
+		buffer size will be used.  The environment variable SHELL is
+		used to determine which shell is to be run.  This script can
+		be used to create a new shell window from the remote host side,
+		in a similar fashion to how ALT-N creates a new shell window
+		from the UW/PC side.
+
+		Usage: uwsh [-n] [-ttitle] [-wtermtype] [-blines] [arg ...]
+
+	uwmore	This is similar to uwvi, except that it runs the user's default
+		pager on the given files in the created window.  The pager is
+		given by the PAGER environment variable, or is set to "more"
+		if that variable is not set.  If "-b" is not given, the effect
+		is the same as "-b0".
+
+		Usage: uwmore [-n] [-ttitle] [-wtermtype] [-blines] [file ...]
+
+	uwclock	A novelty script to display the current date and time in a
+		window, and update it every 10 seconds.  It requires the
+		command "clear" to be somewhere on the user's path to clear the
+		window.  A waste of a good window if you ask me. :-)
+
+		Usage: uwclock [-n] [-ttitle]
+
+The uwvi, uwsh and uwmore scripts can form the basis for other scripts to run
+commands in a window, by simply modifying the last few lines of the scripts.
+Some of these scripts make use of the "/bin/echo" command to send escape
+sequences to UW/PC with the "-n" echo command-line option.  If your "/bin/echo"
+does not support "-n", you should edit the scripts to change it to a version
+of echo that does.  It's not the end of the world if your echo does not have
+"-n" - the scripts will still run, but there may be some extra spurious blank
+lines around on the screen.
+
+Sooner or later you will get sick of setting up your favourite windows every
+time you start the server and will want to have them automatically created.
+The ".uwrc" file in your home directory exists for this purpose.  It is similar
+to the .xsession or .xinitrc file used by X/Windows.  You place commands in it
+to be executed when the UW server starts up, and these commands in turn will
+create all your windows for you.  For example:
+
+	:
+	uwtool -wansi -t"Shell Window 1" uwrun -wvtansi
+	uwtool -wansi -t"Shell Window 2" uwrun -wvtansi
+	uwtool -wansi -t"News Reader" uwrun -s -wvtansi nn
+	uwclock -n -t"Clock"
+	sleep 3
+
+I've found that the most reliable way to make the .uwrc file work as intended
+is to make it executable ("chmod +x .uwrc"), set the first line to ":" and
+the last line to "sleep 3".  Other setups give mixed results, with the server
+or windows sometimes exiting prematurely for no apparent reason.  Making it
+executable and starting with the ':' line will force the server to run the
+file using the Bourne shell /bin/sh.  Adding the "sleep 3" line allows the
+system to settle after all the windows have been created, and seems to stop
+the server exiting prematurely.
+
+An alternative way to write the above example script that makes better use
+of the shell scripts from SCRIPTS.TAR follows:
+
+	:
+	UWTERM=vtansi export UWTERM
+	uwsh -n -t"Shell Window 1"
+	uwsh -n -t"Shell Window 2"
+	uwcmd -n -s -t"News Reader" nn
+	uwclock -n -t"Clock"
+	sleep 3
+
+The "-s" option on the fifth line above tells "uwcmd" to wait 5 seconds after
+the command terminates.  This is so that, if the command ("nn" in this case)
+terminates quickly during the server startup (e.g. there is no news to be
+read), then the command won't exit back to the server too quickly and thereby
+cause UW/PC to get "over-anxious" and kill the server because there are no
+other windows present (because they are still being created).  The "-s" option
+and the "sleep 3" line smooths out the startup so that such race conditions
+between windows being created and windows dying don't cause the server to be
+killed prematurely.  Another use for the "-s" option is to wait after a
+command terminates to give the user a chance to see what happened before the
+window is killed and all evidence disappears.
+
+Since the .uwrc file is simply a shell script, you should be able to do almost
+anything in it to set up your windows just the way you like them.  In future
+versions of UW/PC I hope to add other commands and special escape sequences
+to the Windows 3.0 version to enable changing the size of a window, making the
+window iconic, etc, under the control of the remote Unix host.
+
+10. SPECIAL UW/PC ESCAPE SEQUENCES.
+
+This section describes a number of special escape sequences that may be sent
+from the remote host to UW/PC to cause special things to happen.  They are
+all preceded by the two characters ESC and '|' and a single letter.  The letter
+tells UW/PC what action is to be performed.  These commands are unique to
+UW/PC and are not supported by any other Unix Windows client program.  Most
+of the time you will not need to use these because the shell scripts described
+in the previous section will generate most of them as required.  The currently
+supported letters follow:
+
+	S	Set the size of the scroll-back buffer in the window this
+		command is written in.  The letter 'S' must followed by zero
+		or more decimal digits, an optional CR character, and a
+		terminating LF character.  If at least one digit is given,
+		then the combined value is the number of lines the scroll-back
+		buffer should be resized to (0 for no scroll-back buffer), and
+		if there are no digits, then the default number of lines of
+		scroll-back will be restored.  The "uwrun" and "uwscroll"
+		scripts will generate this escape sequence.
+
+	P	Pop-up the window this command is written in to the top and
+		make it the current window.  The "uwrun" script will generate
+		this escape sequence.
+
+	T	Send a string of the form "stty rows n columns m" back to the
+		remote host.  This is primarily for fixing the size that the
+		Unix host thinks the window is.  The "uwsize" script will
+		generate this escape sequence.
+
+	t	Send a string of the form "TERM=xxx export TERM" back to the
+		remote host, where "xxx" is the name of the terminal type in
+		use by the window.  This is primarily for fixing the terminal
+		type on the Unix side so it corresponds to the terminal type
+		in use on the UW/PC side.  The "uwtype" script will generate
+		this escape sequence.
+
+	u	This is similar to the 't' command, except that sends back a
+		string of the form "setenv TERM xxx" instead.  The "uwtype"
+		script will generate this escape sequence if the SHELL
+		environment variable indicates csh or tcsh.
+
+It is expected that this set of commands will be expanded in future versions
+of UW/PC.
+
+11. LIMITATIONS
 
 UW/PC and the UW server have a number of limitations.  Primarily, if
 a large amount of output is appearing in one window, the UW server will
@@ -801,7 +1251,7 @@ followed by the "Delete" key (or the backspace key if the "swapbs"
 configuration option is set to "on"), which corresponds to the UW exit
 command, which should abort the UW server.
 
-10. FUTURE WORK
+12. FUTURE WORK
 
 In future, UW/PC will be extended with the following capabilities: A
 mini-FTP protocol, scroll-back buffers, Ymodem file transfers in any

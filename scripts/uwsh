@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+# uwsh - A script to start the user's SHELL in a new UW window.
+#
+# Usage: uwsh [-ttitle] [-n] [-wtermtype] [-blines] [-] [sh-arg ...]
+#
+
+# Fetch the title (so any spaces don't get lost).
+case $1 in
+  -t*) UWTITLE="$1"
+       shift;;
+    *) UWTITLE=;;
+esac
+
+# Set the shell to sh if a default not specified.
+if [ -z "$SHELL" ]; then
+  SHELL=sh
+fi
+
+# Now execute uwcmd to start up the shell.
+exec uwcmd -c"sh -c $SHELL" "$UWTITLE" $*

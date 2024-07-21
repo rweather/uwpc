@@ -1,0 +1,13 @@
+#!/bin/sh
+#
+# uwclockd - "Daemon" to run in a window to display the current time.
+#
+# Usage: uwclockd [dateopt]
+#
+
+while true
+do
+  clear
+  date $*
+  sleep 10
+done

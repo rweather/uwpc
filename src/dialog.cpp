@@ -25,6 +25,7 @@
 //  Version  DD/MM/YY  By  Description
 //  -------  --------  --  --------------------------------------
 //    1.0    14/04/91  RW  Original Version of DIALOG.CPP
+//    1.1    05/04/92  RW  Hack showstring to truncate lines.
 //
 //-------------------------------------------------------------------------
 
@@ -98,13 +99,27 @@ void	UWDialogBox::terminate (void)
   UWMaster.remove ();		// Remove this client from client stack.
 } // UWDialogBox::terminate //
 
-// Show a string on the screen in the dialog box.
-void	UWDialogBox::showstring (int x,int y,char *str)
+// Show a string on the screen in the dialog box.  If "high"
+// is non-zero, then the first character in the string will
+// be displayed in the highlighting attribute.
+void	UWDialogBox::showstring (int x,int y,char *str,int high)
 {
   unsigned attr;
+  int len,savech;
   attr = ATTR(ATTR_NORMAL) << 8;
-  while (*str)
+  len = strlen (str);
+  if (len > (dx2 - x))
+    len = dx2 - x;
+  if (len < 0)
+    len = 0;
+  savech = str[len];
+  str[len] = '\0';
+  if (high && *str)	// Display first character highlighted if necessary.
+    HardwareScreen.draw (x++,y,((*str++) & 255) |
+    				(ATTR(ATTR_HIGHLIGHT) << 8),1);
+  while (*str)		// Display the rest of the string.
     HardwareScreen.draw (x++,y,((*str++) & 255) | attr,1);
+  *str = savech;
 } // UWDialogBox::showstring //
 
 void	UWDialogBox::key (int keypress)
@@ -213,6 +228,7 @@ void	UWEditBox::key (int keypress)
       case 033:	// Fall through to CR handling code //
       case '\r':process (keypress == 033);
 		break;
+      case BS_KEY:
       case 8:	if (posn <= 0)
       		  break;
 		--posn;

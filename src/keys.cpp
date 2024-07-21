@@ -105,7 +105,9 @@ int	GetKeyPress (void)
       if (!bioskey (1))
         return (-1);		/* There are no keys ready */
       key = bioskey (0);
-      if (key & 255)		/* Normal ASCII keystroke */
+      if (key == 0xE08)		/* Check for backspace as a special case */
+        return (BS_KEY);
+       else if (key & 255)	/* Normal ASCII keystroke */
         return (key & 255);
        else if (key == 0x300)	/* CTRL-@ */
         return (0);
@@ -113,11 +115,11 @@ int	GetKeyPress (void)
         return (BREAK_KEY);
        else if (key == 0x7500)	/* CTRL-END */
         return (BREAK_KEY);
-       else if (key == 0x8100)	/* ALT-0 -> ALT-W */
+       else if (key == (int)0x8100) /* ALT-0 -> ALT-W */
         return (NEXTWIN_KEY);
        else if (key == 0x5300)
         return (0x7F);		/* Delete key => ASCII 'DEL' character */
-       else if (key == 0x9200)	/* CTRL-INSERT -> ALT-C */
+       else if (key == (int)0x9200) /* CTRL-INSERT -> ALT-C */
         return (CUT_KEY);
        else if (key >= 0x3B00 && key <= 0x4400 &&
        		UWConfig.FKeys[(key >> 8) - 0x3B][0] != '\0')

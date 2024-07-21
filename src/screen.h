@@ -26,6 +26,7 @@
 //  -------  --------  --  --------------------------------------
 //    1.0    23/03/91  RW  Original Version of SCREEN.H
 //    1.1    26/05/91  RW  Add command-line to "jumpdos".
+//    1.2    14/03/92  RW  Add support for 43/50 line modes.
 //
 //-------------------------------------------------------------------------
 
@@ -74,6 +75,7 @@ private:
 	int	 flags;			// Internal hardware screen flags.
 	unsigned char	oldattr;	// Old screen attribute to be restored.
 	int	 mode;			// Screen mode being used.
+	int	 origmode;		// Original screen mode in use.
 	int	 saveshape;		// Saved cursor shape
 	int	 savex,savey;		// Saved cursor position.
 	int	 dlgx1,dlgy1,dlgx2,dlgy2; // Position of the dialog box.
@@ -113,7 +115,7 @@ public:
 	void	draw	(int x,int y,unsigned pair,int dialog=0);
 
 	// Draw a lines of character/attribute pairs on the screen.
-	void	line	(int x,int y,unsigned *pairs,int numpairs,
+	void	line	(int x,int y,unsigned far *pairs,int numpairs,
 			 int dialog=0);
 
 	// Scroll an area of the screen a number of lines.

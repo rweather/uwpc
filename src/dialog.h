@@ -52,8 +52,10 @@ protected:
 	// active client in this window.
 	void	terminate (void);
 
-	// Show a string on the screen in the dialog box.
-	void	showstring (int x,int y,char *str);
+	// Show a string on the screen in the dialog box.  If "high"
+	// is non-zero, then the first character in the string will
+	// be displayed in the highlighting attribute.
+	void	showstring (int x,int y,char *str,int high=0);
 
 public:
 

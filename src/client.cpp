@@ -36,6 +36,7 @@
 #include "comms.h"		// Direct serial comms routines
 #include "clipbd.h"		// Clipboard processing routines
 #include "mouse.h"		// Mouse handling routines
+#include "keys.h"		// Keyboard definitions
 
 #pragma	warn	-par
 
@@ -43,12 +44,12 @@
 // implementing a cut-and-paste operation.
 void	UWTerminal::mouse (int x,int y,int buttons)
 {
-#ifdef	UWPC_DOS
+// #ifdef	UWPC_DOS
   if (buttons & MOUSE_LEFT)			// Check for start of cut.
     new UWCutToClipboard (window,1,x,y);
    else if (buttons & MOUSE_RIGHT)		// Check for a paste.
     new UWPasteFromClipboard (window);
-#endif
+// #endif
 } // UWTerminal::mouse //
 
 // Process a user's keypress.  This will only be called
@@ -57,12 +58,14 @@ void	UWTerminal::key (int keypress)
 {
   if ((keypress == 021 || keypress == 023) && !UWConfig.XonXoffFlag)
     comsend (UWConfig.ComPort,keypress); // Send XON/XOFF direct.
-   else if (keypress == 8 && UWConfig.SwapBSKeys)
+   else if (keypress == BS_KEY && UWConfig.SwapBSKeys)
     send (127);			// Swap BS and DEL.
    else if (keypress == 127 && UWConfig.SwapBSKeys)
     send (8);
    else if (keypress >= 0 && keypress <= 255)
     send (UWConfig.KeyTransTable[keypress]);
+   else if (keypress == BS_KEY)
+    send (8);
    else
     defkey (keypress);		// Process the keypress in the default way.
 } // UWTerminal::key //

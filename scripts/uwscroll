@@ -1,0 +1,3 @@
+#!/bin/sh
+# uwscroll - set the size of the current window's scroll-back buffer.
+echo '|S'"$1"		# Must be an echo and NOT an echo -n.

@@ -31,6 +31,8 @@
 //
 //-------------------------------------------------------------------------
 
+#pragma	inline			// This file contains some inline assembly.
+
 #include "display.h"		// Declarations for this module.
 #include "screen.h"		// Screen display handling routines.
 #include "config.h"		// Status positions defined here.
@@ -50,6 +52,7 @@
 #define	CURSOR_ON()	cursoron()
 extern	HANDLE	hInstance;
 extern	int	UWFontHeight,UWFontWidth;
+extern	int	UWFirstScan,UWCursHeight;
 extern	HFONT	hFont;
 #endif
 
@@ -62,7 +65,33 @@ void	UWDisplay::show (int X,int Y,unsigned pair)
   if (attop)
     HardwareScreen.draw (X,Y,pair);
 #else
-  // repaint (X,Y,X,Y);
+  // Check to see if the output is suspended first.
+  if (suspended)
+    {
+      if (chbufferx < 0)
+        {
+	  // First character into the suspension buffer //
+	  chbufferx = X;
+	  chbuffery = Y;
+	  chbufferlen = 1;
+	}
+       else if ((chbufferx + chbufferlen) == X && chbuffery == Y)
+        {
+	  // Add a new character to the suspension buffer //
+	  chbufferlen++;
+	}
+       else
+        {
+	  // Flush the suspension buffer and add a new character //
+	  drawline ();
+	  chbufferx = X;
+	  chbuffery = Y;
+	  chbufferlen = 1;
+	}
+      return;		// Suspended character processed: exit.
+    }
+
+  // Draw the single character in the window.
   HDC hDC;
   unsigned char attr;
   extern COLORREF WindowsAttributes[];
@@ -74,8 +103,10 @@ void	UWDisplay::show (int X,int Y,unsigned pair)
 
   // Set the attribute colours to be used for the character draw //
   attr = pair >> 8;
+#ifdef	NOT_CARET
   if (curson && y == Y && x == X) // Test for the cursor position.
     attr = (attr << 4) | ((attr >> 4) & 0x0F);
+#endif
   SetBkColor (hDC,WindowsAttributes[(attr >> 4) & 7]);
   SetTextColor (hDC,WindowsAttributes[attr & 7]);
 
@@ -89,111 +120,145 @@ void	UWDisplay::show (int X,int Y,unsigned pair)
 
 void	UWDisplay::scroll (int x1,int y1,int x2,int y2,int lines,int attribute)
 {
-  int offset,saveofs,nextofs,x,y,linewid;
+  int ofs,saveofs,nextofs,x,y,linewid,diff;
   unsigned clearpair;
+#ifdef	__TURBOC__
+  unsigned far *scrn;
+#endif
+
+  // Abort if the region is "too small" //
+  if (x2 < x1 || y2 < y1)
+    return;
+
+#ifdef	UWPC_WINDOWS
+  if (suspended && chbufferx >= 0)
+    {
+      // Update the suspension buffer region before the scroll //
+      drawline ();
+      chbufferx = -1;
+    }
+#endif
 
   // Clear or scroll the memory for the screen image //
   clearpair = ' ' | (attribute << 8);
   if (lines == 0)
     {
       // Clear the entire area to be scrolled //
-      offset = x1 + (y1 * width);
+      ofs = x1 + (y1 * width);
+#ifdef	__TURBOC__
+      linewid = x2 - x1 + 1;
+      scrn = screen;
+#endif
       for (y = y1;y <= y2;++y)
         {
-	  saveofs = offset;
+#ifndef	__TURBOC__
+	  saveofs = ofs;
           for (x = x1;x <= x2;++x)
-	    screen[offset++] = clearpair;
-	  offset = saveofs + width;
+	    screen[ofs++] = clearpair;
+	  ofs = saveofs + width;
+#else
+	  asm les di,scrn;		// Clear the line using assembly
+	  asm mov ax,ofs;		// code to get the fastest clear
+	  asm shl ax,1;			// possible to defeat slowdowns.
+	  asm add di,ax;		// Only do in TC/BC so I can port
+	  asm mov cx,linewid;		// this to Unix one of these days.
+	  asm mov ax,clearpair;
+	  asm cld;
+	  asm rep stosw;
+	  ofs += width;
+#endif
 	}
     }
    else if (lines > 0)
     {
-// #ifdef	DOOBERY
+#ifdef	DOOBERY
       // Scroll the area up a number of lines //
-      offset = x1 + (y1 * width);
-      nextofs = offset + width;
+      ofs = x1 + (y1 * width);
+      diff = width * lines;
+      nextofs = ofs + diff;
       for (y = y1;y <= (y2 - lines);++y)
         {
-	  saveofs = offset;
+	  saveofs = ofs;
           for (x = x1;x <= x2;++x)
-	    screen[offset++] = screen[nextofs++];
-	  offset = saveofs + width;
-	  nextofs = offset + width;
+	    screen[ofs++] = screen[nextofs++];
+	  ofs = saveofs + width;
+	  nextofs = ofs + diff;
 	}
       while (y <= y2)
         {
-	  saveofs = offset;
+	  saveofs = ofs;
           for (x = x1;x <= x2;++x)
-            screen[offset++] = clearpair;
-	  offset = saveofs + width;
+            screen[ofs++] = clearpair;
+	  ofs = saveofs + width;
 	  ++y;
 	}
     }
    else
     {
       // Scroll the area down a number of lines //
-      offset = x1 + (y2 * width);
-      nextofs = offset - width;
+      ofs = x1 + (y2 * width);
+      diff = width * lines;		// Note: lines < 0
+      nextofs = ofs + diff;
       for (y = y2;y >= (y1 - lines);--y)
         {
-	  saveofs = offset;
+	  saveofs = ofs;
           for (x = x1;x <= x2;++x)
-	    screen[offset++] = screen[nextofs++];
-	  offset = saveofs - width;
-	  nextofs = offset - width;
+	    screen[ofs++] = screen[nextofs++];
+	  ofs = saveofs - width;
+	  nextofs = ofs + diff;
 	}
       while (y >= y1)
         {
-	  saveofs = offset;
+	  saveofs = ofs;
           for (x = x1;x <= x2;++x)
-            screen[offset++] = clearpair;
-	  offset = saveofs - width;
-	  --y;
-	}
-    }
-// #endif	DOOBERY
-#ifdef	DOOBERY		// Comment this code out - it doesn't work :-(
-      // Scroll the area up a number of lines //
-      offset = x1 + (y1 * width);
-      nextofs = offset + width;
-      linewid = (x2 - x1 + 1) << 1;
-      for (y = y1;y <= (y2 - lines);++y)
-        {
-	  memcpy (screen + offset,screen + nextofs,linewid);
-	  offset += width;
-	  nextofs += width;
-	}
-      while (y <= y2)
-        {
-	  saveofs = offset;
-          for (x = x1;x <= x2;++x)
-            screen[offset++] = clearpair;
-	  offset = saveofs + width;
-	  ++y;
-	}
-    }
-   else
-    {
-      // Scroll the area down a number of lines //
-      offset = x1 + (y2 * width);
-      nextofs = offset - width;
-      linewid = (x2 - x1 + 1) << 1;
-      for (y = y2;y >= (y1 - lines);--y)
-        {
-	  memcpy (screen + offset,screen + nextofs,linewid);
-	  offset += width;
-	  nextofs += width;
-	}
-      while (y >= y1)
-        {
-	  saveofs = offset;
-          for (x = x1;x <= x2;++x)
-            screen[offset++] = clearpair;
-	  offset = saveofs - width;
+            screen[ofs++] = clearpair;
+	  ofs = saveofs - width;
 	  --y;
 	}
     }
 #endif	DOOBERY
+// #ifdef	DOOBERY		// Comment this code out - it doesn't work :-(
+      // Scroll the area up a number of lines //
+      ofs = x1 + (y1 * width);
+      nextofs = ofs + width * lines;
+      linewid = (x2 - x1 + 1) << 1;
+      for (y = y1;y <= (y2 - lines);++y)
+        {
+	  memcpy (screen + ofs,screen + nextofs,linewid);
+	  ofs += width;
+	  nextofs += width;
+	}
+      while (y <= y2)
+        {
+	  saveofs = ofs;
+          for (x = x1;x <= x2;++x)
+            screen[ofs++] = clearpair;
+	  ofs = saveofs + width;
+	  ++y;
+	}
+    }
+   else
+    {
+      // Scroll the area down a number of lines //
+      ofs = x1 + (y2 * width);
+      nextofs = ofs + width * lines;	// Note: lines < 0
+      linewid = (x2 - x1 + 1) << 1;
+      for (y = y2;y >= (y1 - lines);--y)
+        {
+	  memcpy (screen + ofs,screen + nextofs,linewid);
+	  ofs -= width;
+	  nextofs -= width;
+	}
+      while (y >= y1)
+        {
+	  saveofs = ofs;
+          for (x = x1;x <= x2;++x)
+            screen[ofs++] = clearpair;
+	  ofs = saveofs - width;
+	  --y;
+	}
+    }
+// #endif	DOOBERY
 #ifdef	UWPC_DOS
   if (attop)
     {
@@ -203,38 +268,73 @@ void	UWDisplay::scroll (int x1,int y1,int x2,int y2,int lines,int attribute)
         HardwareScreen.scroll (x1,y1,x2,y2,lines,attribute);
     }
 #else
-  repaint (x1,y1,x2,y2);	// Invalidate the scrolling area.
+  // Perform a repaint on the area we just scrolled //
+  if (!lines)
+    repaint (x1,y1,x2,y2);	// Repaint (clear) the scrolling region.
+   else
+    {
+      // Use the Windows 3.0 scrolling primitive (because it is faster) //
+      RECT scrollrect;
+      if (lines > 0)
+        {
+          scrollrect.left = x1 * UWFontWidth;
+          scrollrect.top = (y1 + lines) * UWFontHeight;
+          scrollrect.right = (x2 + 1) * UWFontWidth;
+          scrollrect.bottom = (y2 + 1) * UWFontHeight;
+        }
+       else
+        {
+	  // Note: lines < 0.
+          scrollrect.left = x1 * UWFontWidth;
+          scrollrect.top = y1 * UWFontHeight;
+          scrollrect.right = (x2 + 1) * UWFontWidth;
+          scrollrect.bottom = (y2 + 1 + lines) * UWFontHeight;
+	}
+      ScrollWindow (hWnd,0,(-lines) * UWFontHeight,&scrollrect,NULL);
+      UpdateWindow (hWnd);
+    }
 #endif
 } // UWDisplay::scroll //
 
 void	UWDisplay::setcurs (void)
 {
+  int dox = x;
+  if (dox >= width)
+    dox = width - 1;
 #ifdef	UWPC_DOS
   if (attop && !HardwareScreen.dialogenabled)
-    HardwareScreen.cursor (x,y);
+    HardwareScreen.cursor (dox,y);
 #else
 #ifndef	NOT_CARET
   if (careton)
-    SetCaretPos (x * UWFontWidth,y * UWFontHeight);
+    SetCaretPos (dox * UWFontWidth,y * UWFontHeight + UWFirstScan);
 #endif
 #endif
 } // UWDisplay::setcurs //
 
 UWDisplay::UWDisplay (int number)
 {
+  if (number)		// Get a default window title first.
+    {
+      strcpy (title,"N - UW/PC");
+      title[0] = number + '0';
+    } /* then */
+   else
+    strcpy (title,"Unix Windows");
+  wNumber = number;	// Record the window number for later.
 #ifdef	UWPC_DOS
   width = HardwareScreen.width;
   height = HardwareScreen.height - 1;
 #else
-  char title[10] = "UW/PC - N";
   RECT rect;
   int wid,ht,changed;
   width = 80;
   height = 24;
-  wNumber = number;	// Record the window number for later.
+  suspended = 0;	// Don't suspend the output yet.
   hWnd = NULL;		// Mark the Windows 3.0 window as not present.
 #endif
-  screen = new unsigned [width * height];
+  // screen = new unsigned [width * height];
+  screen = (unsigned far *)UWAlloc (width * height * sizeof (unsigned));
   attop = 0;
 #ifdef	UWPC_DOS
   attr = HardwareScreen.attributes[ATTR_NORMAL];
@@ -244,6 +344,7 @@ UWDisplay::UWDisplay (int number)
   scrollattr = attr;
   x = 0;
   y = 0;
+  deftabs ();
   wrap52 = 0;
   if (screen == 0)
     width = 0;
@@ -251,12 +352,11 @@ UWDisplay::UWDisplay (int number)
     {
 #ifdef	UWPC_WINDOWS
       // Create the Windows 3.0 window associated with this display object //
-      title[8] = number + '0';
       curson = 0;
       mousebuttons = 0;
       hWnd = CreateWindow ((number == 0 ? "UWPCMainClass" : "UWPCSessClass"),
       						// Name of window class.
-      			   (number == 0 ? "Unix Windows" : title),
+      			   title,		// Title on the window.
 			   			// Window name.
 			   WS_OVERLAPPEDWINDOW,	// Style of window to use.
 			   CW_USEDEFAULT,	// Default initial position.
@@ -326,12 +426,15 @@ UWDisplay::UWDisplay (int number)
       UpdateWindow (hWnd);
 #endif
     }
+  toprgn = 0;		// Set the default scrolling region.
+  botmrgn = height - 1;
 } // UWDisplay::UWDisplay //
 
 UWDisplay::~UWDisplay (void)
 {
   if (screen)
-    delete screen;
+    UWFree (screen);
+    // delete screen;
 #ifdef	UWPC_WINDOWS
   if (hWnd)
     DestroyWindow (hWnd);
@@ -385,9 +488,10 @@ void	UWDisplay::send	(int ch,int vt52wrap)
   if (x >= width)
     {
       if (vt52wrap)
-        {
-	  wrap52 = 1;
-	  --x;
+	{
+	  x = width;
+	  // wrap52 = 1;
+	  // --x;
 	}
        else
 	{
@@ -416,11 +520,11 @@ void	UWDisplay::lf	(void)
 {
   CURSOR_OFF ();
   ++y;
-  if (y >= height)
+  if (y > botmrgn)
     {
       // Scroll the display up one line //
       --y;
-      scroll (0,0,width - 1,height - 1,1,scrollattr);
+      scroll (0,toprgn,width - 1,botmrgn,1,scrollattr);
     }
   wrap52 = 0;
   setcurs ();
@@ -434,16 +538,29 @@ void	UWDisplay::revlf (void)
 {
   CURSOR_OFF ();
   --y;
-  if (y < 0)
+  if (y < toprgn)
     {
       // Scroll the display down one line //
       y = 0;
-      scroll (0,0,width - 1,height - 1,-1,scrollattr);
+      scroll (0,toprgn,width - 1,botmrgn,-1,scrollattr);
     }
   wrap52 = 0;
   setcurs ();
   CURSOR_ON ();
 } // UWDisplay::revlf //
+
+// Set a scrolling region on the display.
+void	UWDisplay::region (int top,int botm)
+{
+  if (top < 0)
+    top = 0;
+  if (botm >= height)
+    botm = height - 1;
+  if (botm < top)
+    botm = top;
+  toprgn = top;
+  botmrgn = botm;
+} // UWDisplay::region //
 
 // Move back one position on the display.  If 'wrap'
 // is non-zero, wrap to previous lines as well.
@@ -489,7 +606,7 @@ void	UWDisplay::tab (int vt52wrap,int tabsize,int nd)
 	      if (vt52wrap)
 	        {
 		  wrap52 = 1;
-		  --x;
+		  // --x;
 		}
 	       else
 		{
@@ -501,7 +618,8 @@ void	UWDisplay::tab (int vt52wrap,int tabsize,int nd)
 	  CURSOR_ON ();
         } /* if */
     }
-  while ((x % tabsize) != 0);
+  while (x > 0 && x < width && !(tabs[x / 8] & (1 << (x % 8))));
+  // while ((x % tabsize) != 0);
 } // UWDisplay::tab //
 
 // Ring the terminal bell - this directly calls
@@ -531,10 +649,27 @@ void	UWDisplay::move	(int newx,int newy)
   CURSOR_ON ();
 } // UWDisplay::move //
 
+// Move the cursor to a new position relative to
+// its current position.
+void	UWDisplay::moverel (int relx,int rely)
+{
+  CURSOR_OFF ();
+  x += relx;
+  y += rely;
+  if (x < 0) x = 0;
+  if (x >= width) x = width - 1;
+  if (y < 0) y = 0;
+  if (y >= height) y = height - 1;
+  wrap52 = 0;
+  setcurs ();
+  CURSOR_ON ();
+} // UWDisplay::moverel //
+
 // Clear the display according to a particular clearing
 // type.  This function does not move the cursor position.
 void	UWDisplay::clear	(int clrtype)
 {
+  CURSOR_OFF ();
   switch (clrtype)
     {
       case CLR_ALL:
@@ -553,31 +688,37 @@ void	UWDisplay::clear	(int clrtype)
 		/* Fall through to start of line clear */
       case CLR_ST_LINE:
       		if (x > 0)
-      		  scroll (0,y,x - 1,y,0,scrollattr);
+      		  scroll (0,y,x,y,0,scrollattr);
 		break;
       default:	break;
     }
   wrap52 = 0;
+  CURSOR_ON ();
 } // UWDisplay::clear //
 
 // Insert a new line on the display.
 void	UWDisplay::insline	(void)
 {
+  CURSOR_OFF ();
   scroll (0,y,width - 1,height - 1,-1,scrollattr);
   wrap52 = 0;
+  CURSOR_ON ();
 } // UWDisplay::insline //
 
 // Delete the current line from the display.
 void	UWDisplay::delline	(void)
 {
+  CURSOR_OFF ();
   scroll (0,y,width - 1,height - 1,1,scrollattr);
   wrap52 = 0;
+  CURSOR_ON ();
 } // UWDisplay::delline //
 
 // Insert a new character into the current line.
 // If 'ch' is -1, then insert a blank and don't move cursor.
 void	UWDisplay::inschar	(int ch)
 {
+  CURSOR_OFF ();
   int offset,xval;
 #ifdef	UWPC_DOS
   int start;
@@ -610,12 +751,14 @@ void	UWDisplay::inschar	(int ch)
 #endif
   if (ch != -1)
     send (ch);
+  CURSOR_ON ();
 } // UWDisplay::inschar //
 
 // Delete the current character, and append the given
 // character to the current line.
 void	UWDisplay::delchar	(int ch)
 {
+  CURSOR_OFF ();
   int offset,xval;
 #ifdef	UWPC_DOS
   int start;
@@ -641,15 +784,18 @@ void	UWDisplay::delchar	(int ch)
   repaint (x,y,width - 1,y);
 #endif
   wrap52 = 0;
+  CURSOR_ON ();
 } // UWDisplay::delchar //
 
 // Scroll the screen up or down one line.
 void	UWDisplay::scrollscreen (int up)
 {
+  CURSOR_OFF ();
   if (up)
     scroll (0,0,width - 1,height - 1,1,scrollattr);
    else
     scroll (0,0,width - 1,height - 1,-1,scrollattr);
+  CURSOR_ON ();
 } // UWDisplay::scrollscreen //
 
 // If the screen has a status line, then set it to the
@@ -782,7 +928,7 @@ void	UWDisplay::markcut (int x1,int y1,int x2,int y2)
 
 // Copy screen data into a clipboard buffer.  The
 // length of the written data is returned.
-int	UWDisplay::copycut (int x1,int y1,int x2,int y2,char *buffer)
+int	UWDisplay::copycut (int x1,int y1,int x2,int y2,char far *buffer)
 {
   int temp,x,y,offset,nextline,length;
   if (x1 > x2)
@@ -822,3 +968,123 @@ int	UWDisplay::copycut (int x1,int y1,int x2,int y2,char *buffer)
     }
   return (length);		// Return the length of the paste buffer.
 } // UWDisplay::copycut //
+
+// Set a tab stop at the current X position.
+void	UWDisplay::settab (int posn)
+{
+  if (posn < 0)
+    posn = x;
+  if (posn < (TAB_SET_SIZE * 8))
+    tabs[posn / 8] |= (1 << (posn % 8));
+} // UWDisplay::settab //
+
+// Reset a tab stop at the current Y position.
+void	UWDisplay::restab (void)
+{
+  if (x < (TAB_SET_SIZE * 8))
+    tabs[x / 8] &= ~(1 << (x % 8));
+} // UWDisplay::restab //
+
+// Clear all tab stops.
+void	UWDisplay::clrtabs (void)
+{
+  int temp;
+  for (temp = 0;temp < TAB_SET_SIZE;++temp)
+    tabs[temp] = 0;
+} // UWDisplay::clrtabs //
+
+// Set the default tab stops every "tabsize" positions.
+void	UWDisplay::deftabs (int tabsize)
+{
+  int temp;
+  clrtabs ();
+  for (temp = 0;temp < width;temp += tabsize)
+    settab (temp);
+} // UWDisplay::deftabs //
+
+// Clear the current window title.
+void	UWDisplay::clrtitle (void)
+{
+  if (wNumber)
+    {
+      // Keep the window number visible so the user doesn't get lost. :-)
+      title[0] = wNumber + '0';
+      title[1] = ' ';
+      title[2] = '-';
+      title[3] = ' ';
+      title[4] = '\0';
+    }
+   else
+    title[0] = '\0';
+} // UWDisplay::clrtitle //
+
+// Add another character to the end of the current window title.
+void	UWDisplay::addtitle (int ch)
+{
+  int len = strlen (title);
+  if (len < (WTITLE_LEN - 1))
+    {
+      title[len++] = ch;
+      title[len] = '\0';
+    }
+} // UWDisplay::addtitle //
+
+// Set the displayed title for the window.  This is mainly
+// for the benefit of the Windows 3.0 version.
+void	UWDisplay::showtitle (void)
+{
+#ifdef	UWPC_WINDOWS
+  SetWindowText (hWnd,title);	// Set the Windows 3.0 title.
+#endif
+} // UWDisplay::showtitle //
+
+// Fill the entire window with a character to perform an
+// alignment test.
+void	UWDisplay::aligntest (int ch)
+{
+#ifdef	UWPC_WINDOWS
+  if (suspended && chbufferx >= 0)
+    {
+      // Update the suspension buffer region before the test //
+      drawline ();
+      chbufferx = -1;
+    }
+#endif
+  unsigned pair = ch | (attr << 8);
+  unsigned far *scrn = screen;
+  int size = width * height;
+  while (size-- > 0)
+    *scrn++ = pair;
+#ifdef	UWPC_DOS
+  if (attop)
+    top (attop);
+#else
+  repaint (0,0,width - 1,height - 1);
+#endif
+} // UWDisplay::aligntest //
+
+#ifdef	UWPC_WINDOWS
+
+// Suspend output in the window for a little while.
+void	UWDisplay::suspend (int stop)
+{
+  if (stop)
+    {
+      // Suspend writing to the Windows 3.0 window for now //
+      CURSOR_OFF ();
+      suspended = 1;
+      chbufferx = -1;
+    }
+   else
+    {
+      // Flush the buffer and start writing again //
+      if (chbufferx >= 0)
+        {
+          drawline ();
+	}
+      suspended = 0;
+      CURSOR_ON ();
+    }
+} // UWDisplay::suspend //
+
+#endif

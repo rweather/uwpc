@@ -1,0 +1,3 @@
+#!/bin/sh
+# uwsize - request a "stty" command to be sent from UW/PC.
+/bin/echo -n '|T'

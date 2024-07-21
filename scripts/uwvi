@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# uwvi - A script to start the user's EDITOR on some files in a new UW window.
+#	 This script uses the "uwrun" script and the "uwtool" program, so
+#	 they must be somewhere on the user's path.  If the server is not
+#	 currently running, then the editor is run on the files with no
+#	 other special handling.
+#
+# Usage: uwvi [-ttitle] [-n] [-wtermtype] [-blines] [file ...]
+#
+
+# Fetch the title (so any spaces don't get lost).
+case $1 in
+  -t*) UWTITLE="$1"
+       shift;;
+    *) UWTITLE=;;
+esac
+
+# Set the editor to vi if a default not specified.
+if [ -z "$EDITOR" ]; then
+  EDITOR=vi
+fi
+
+# Now execute uwcmd to start up the editor.
+exec uwcmd -c"$EDITOR" -0 "$UWTITLE" $*

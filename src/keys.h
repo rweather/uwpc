@@ -74,7 +74,9 @@
 #define CAPTURE_KEY		0x2600	/* ALT-L */
 #define	MAIL_KEY		0x3200	/* ALT-M */
 #define	STTY_KEY		0x1400	/* ALT-T */
+#define	OPTIONS_KEY		0x1800	/* ALT-O */
 #define	PAUSE_KEY		-2	/* 1/2 second pause */
+#define	BS_KEY			-3	/* Special code for BS */
 
 /* Initialise the keyboard handling system */
 void	InitKeyboard	(void);

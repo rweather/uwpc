@@ -3,7 +3,7 @@
 // MAIN.CPP - Main module for UW/PC Version 2.
 // 
 //  This file is part of UW/PC - a multi-window comms package for the PC.
-//  Copyright (C) 1990-1991  Rhys Weatherley
+//  Copyright (C) 1990-1992  Rhys Weatherley
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@
 //    1.1    05/05/91  RW  Clean up and begin to add file transfers.
 //    1.2    08/06/91  RW  Add cut/paste and mouse support to UW/PC.
 //    1.3    27/09/91  RW  Add ALT-W for "next window" key.
+//    1.4    05/04/92  RW  Add the dialing directory processing.
 //
 //-------------------------------------------------------------------------
 
@@ -43,6 +44,7 @@
 #include "comms.h"		// Communications routines.
 #include "clipbd.h"		// Clipboard handling routines.
 #include "mouse.h"		// Mouse handling routines.
+#include "dial.h"		// Dialing directory routines.
 #include <dos.h>		// "delay" is defined here.
 #include <string.h>		// String handling routines.
 
@@ -59,37 +61,55 @@
 // Define the title to be displayed for this module.
 //
 char	*TitleString = 
-	"UW/PC version 2.02, Copyright (C) 1990-1991 Rhys Weatherley\n"
+	"UW/PC version 2.03, Copyright (C) 1990-1992 Rhys Weatherley\n"
 	"UW/PC comes with ABSOLUTELY NO WARRANTY; see the file COPYING for details.\n"
 	"This is free software, and you are welcome to redistribute it\n"
 	"under certain conditions; see the file COPYING for details.\n\n"
         "Press ALT-Z for help on special keys.\n\n";
+//	"Note: This is a beta version of UW/PC.  Contact the author for details\n"
+//	"about more up-to-date versions.\n\n";
 
 unsigned cdecl	_stklen=8192;
 
 int	DebugMode;
 FILE	*DebugFile;
 
+//
+// Usage: uw [-debug] [-loopback]
+//
+//	-debug	  Write all characters received to UWDEBUG.OUT
+//	-loopback Set serial port in test loop-back mode.
+//
 int	main	(int argc,char *argv[])
 {
   char *mesg;
+  int testmode=0;
   DebugMode = 0;
   if (argc > 1 && !strcmp (argv[1],"-debug"))
     {
       // Open a debugging file to help me with user problems //
       if ((DebugFile = fopen ("UWDEBUG.OUT","wb")) != NULL)
         DebugMode = 1;
+      ++argv;
+      --argc;
     } /* if */
   UWConfig.doconfig (argv[0]);	// Configure the program as necessary.
+  if (argc > 1 && !strcmp (argv[1],"-loopback"))
+    {
+      testmode = 1;		// Do loopback mode with our comms library.
+    } /* if */
 
   // Enable the communications port.  NOTE: this must be done here
   // because FOSSIL drivers print out things to stdout when they
-  // are initialised, and muck up my nice clean UW startup screen :-) .
-  comenable (UWConfig.ComPort,(UWConfig.ComFossil ? COMEN_FOSSIL : 0) |
-  			      (UWConfig.ComCtsRts ? COMEN_CTSRTS : 0));
+  // are initialised, and will muck up my nice clean startup screen :-( .
+  comenable (UWConfig.ComPort,
+  		(UWConfig.ComFossil && !testmode ? COMEN_FOSSIL : 0) |
+	        (UWConfig.ComCtsRts ? COMEN_CTSRTS : 0));
   comparams (UWConfig.ComPort,UWConfig.ComParams);
+  if (testmode)
+    comtest (UWConfig.ComPort,1);
 
-  if (!HardwareScreen.init (0))
+  if (!HardwareScreen.init (0,UWConfig.BigVideo))
     {
       fprintf (stderr,"Cannot initialise screen - not enough memory\n");
       return (0);
@@ -124,11 +144,16 @@ int	main	(int argc,char *argv[])
 static	void	SendZModemCommand (char *cmd,char *file)
 {
   static char cmdline[256];
-  sprintf (cmdline,"%s port %d portx %x,%d ha off %s %s",
+  static long baudrates[] = {110,150,300,600,1200,2400,
+      			     4800,9600,19200,38400,57600,115200};
+  sprintf (cmdline,"%s port %d portx %x,%d ha off %s estimate 0 %ld %s %s",
   		UWConfig.ZModemCommand,
   		UWConfig.ComPort,
   		comports[UWConfig.ComPort - 1],
-		4 - ((UWConfig.ComPort - 1) % 2),cmd,file);
+		4 - ((UWConfig.ComPort - 1) % 2),
+		(UWConfig.ComDirect ? "d" : ""),
+		baudrates[UWConfig.ComEstBaud],
+		cmd,file);
   UWMaster.direct (1);		// Turn on direct communications.
   UWMaster.jumpdos (cmdline);	// Do the ZMODEM command line.
   UWMaster.direct (0);		// Turn off direct communications.
@@ -187,6 +212,20 @@ public:
 	virtual	void	process	(int index)
 		  { if (index < 2) UWMaster.hangup ();	// Hangup the modem.
 		    terminate (); };
+
+};
+
+class	KillQueryBox : public UWQueryBox {
+
+public:
+
+	KillQueryBox (UWDisplay *wind) :
+		UWQueryBox (wind,"Kill Current Window? Yes or No",31) {};
+
+	virtual	void	process	(int index)
+		  { terminate ();	// This must come before the next line.
+		    if (index < 2) UWMaster.kill ();  // Kill the window.
+		  };
 
 };
 
@@ -318,21 +357,27 @@ void	UWClient::defkey (int keypress)
       			if (wind > 0)
 			  UWMaster.top (wind);
 			break;
-      case KILL_KEY:	UWMaster.kill (); break;
+      case KILL_KEY:	if (UWMaster.protocol > 0)
+      			  {
+			    // Confirm the kill before actually doing it //
+			    if (!(new KillQueryBox (window)))
+      			      UWMaster.kill ();
+			  }
+			break;
       case JUMP_DOS_KEY:UWMaster.jumpdos (); break;
-      case HANGUP_KEY:	if (UWMaster.protocol == 0 ||
-      			    !(new HangupQueryBox (window)))
+      case HANGUP_KEY:	if (UWMaster.protocol == 0)
+      			    // !(new HangupQueryBox (window)))
       			  UWMaster.hangup ();	// Hangup the modem anyway.
 			break;
-      case BREAK_KEY:	if (UWMaster.protocol == 0 ||
-      			    !(new BreakQueryBox (window)))
+      case BREAK_KEY:	if (UWMaster.protocol == 0)
+      			    // !(new BreakQueryBox (window)))
       			  UWMaster.sendbreak (); // Send BREAK anyway.
 			break;
       case INIT_KEY:	UWMaster.sendstring (UWConfig.InitString); break;
       case START_KEY:	if (UWMaster.protocol == 0)
       			  UWMaster.sendstring (UWConfig.CommandString);
 			break;
-      case DIAL_KEY:	UWMaster.sendstring (UWConfig.DialString); break;
+      case DIAL_KEY:	DialingDirectory (window); break;
       case HELP_KEY:	new UWHelpBox (window);
       			break;
       case UPLOAD_KEY:	new FileQueryBox (window,1);
@@ -350,6 +395,9 @@ void	UWClient::defkey (int keypress)
       case PASTE_KEY:	new UWPasteFromClipboard (window); break;
       case NEXTWIN_KEY:	UWMaster.nextwindow (); break;
       case STTY_KEY:	UWMaster.startclient ('T'); break;
+      case OPTIONS_KEY:	extern char **_argv;
+      			UWConfig.dumpconfig (_argv[0]);
+			break;
       default:		if (keypress >= ALT_WIND_NUM (1) &&
       			    keypress <= ALT_WIND_NUM (7))
 			  UWMaster.top (ALT_GET_NUM (keypress));

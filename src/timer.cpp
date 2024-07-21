@@ -3,7 +3,7 @@
 // TIMER.CPP - Timer declarations for UW/PC.
 // 
 //  This file is part of UW/PC - a multi-window comms package for the PC.
-//  Copyright (C) 1990-1991  Rhys Weatherley
+//  Copyright (C) 1990-1992  Rhys Weatherley
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -25,6 +25,7 @@
 //  Version  DD/MM/YY  By  Description
 //  -------  --------  --  --------------------------------------
 //    1.0    07/04/91  RW  Original Version of TIMER.CPP
+//    1.1    24/04/92  RW  Add CurrSystemTime call.
 //
 //-------------------------------------------------------------------------
 
@@ -103,3 +104,16 @@ void	ResetOnline (void)
   OnlineTime = 0;
   OnlineOffset = 0;
 } // ResetOnline //
+
+//
+// Get the current system time as a number of minutes since midnight.
+// This uses operating system calls rather than timer ticks to get
+// the time more accurately.
+//
+int	CurrSystemTime (void)
+{
+  union REGS regs;
+  regs.h.ah = 0x2C;
+  int86 (0x21,&regs,&regs);	// Call DOS to get the current time.
+  return (regs.h.ch * 60 + regs.h.cl);
+} // CurrSystemTime //

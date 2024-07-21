@@ -3,7 +3,7 @@
   TERMCC.L - Lexical analysis declarations for the Termcap Compiler.
  
     This file is part of the Termcap Compiler source code.
-    Copyright (C) 1990-1991  Rhys Weatherley
+    Copyright (C) 1990-1992  Rhys Weatherley
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -119,6 +119,55 @@ keytab			return (CMD_KEYTAB);
 none			return (VAL_NONE);
 tabnd			return (CMD_TABND);
 revlf			return (CMD_REVLF);
+digit			return (VAL_DIGIT);
+type			return (CMD_TYPE);
+uwtadm31		return (VAL_ADM31);
+uwtvt52			return (VAL_VT52);
+uwtansi			return (VAL_ANSI);
+uwttek4010		return (VAL_TEK4010);
+uwtftp			return (VAL_FTP);
+uwtprint		return (VAL_PRINT);
+uwtplot			return (VAL_PLOT);
+uwtunknown		return (VAL_UNKNOWN);
+moved			return (CMD_MOVED);
+movel			return (CMD_MOVEL);
+mover			return (CMD_MOVER);
+moveu			return (CMD_MOVEU);
+moverel			return (CMD_MOVEREL);
+moveh			return (CMD_MOVEH);
+clrmap			return (CMD_CLRMAP);
+map			return (CMD_MAP);
+jmpkeys			return (CMD_JMPKEYS);
+names			return (CMD_NAMES);
+namech			return (CMD_NAMECH);
+region			return (CMD_REGION);
+remstr			return (CMD_REMSTR);
+remnum			return (CMD_REMNUM);
+settab			return (CMD_SETTAB);
+restab			return (CMD_RESTAB);
+clrtabs			return (CMD_CLRTABS);
+deftabs			return (CMD_DEFTABS);
+setfore			return (CMD_SETFORE);
+setback			return (CMD_SETBACK);
+getchg			return (CMD_GETCHG);
+getchg52		return (CMD_GETCHG52);
+getchgi			return (CMD_GETCHGI);
+getchgi52		return (CMD_GETCHGI52);
+clrrgn			return (CMD_CLRRGN);
+copyattr		return (CMD_COPYATTR);
+setbold			return (CMD_SETBOLD);
+setboldoff		return (CMD_SETBOLDOFF);
+setblink		return (CMD_SETBLINK);
+setblinkoff		return (CMD_SETBLINKOFF);
+getchgs			return (CMD_GETCHGS);
+getchgsi		return (CMD_GETCHGSI);
+addtitle		return (CMD_ADDTITLE);
+clrtitle		return (CMD_CLRTITLE);
+showtitle		return (CMD_SHOWTITLE);
+direct			return (CMD_DIRECT);
+nodirect		return (CMD_NODIRECT);
+if			return (CMD_IF);
+align			return (CMD_ALIGN);
 [a-z_A-Z][a-z_A-Z0-9]*	{ if ((yylval = addident (yytext)) == -1)
 			    parsefatal ("Out of symbol table space");
 			   else
@@ -138,6 +187,8 @@ revlf			return (CMD_REVLF);
 ,			return (COMMA);
 ;			return (SEMI);
 :			return (COLON);
+\[			return (LHARD);
+\]			return (RHARD);
 [ \t\r]			/* Ignore white space */
 \n			++lexline;	/* Update the line number */
 .			parserr ("Illegal character");

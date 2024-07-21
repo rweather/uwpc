@@ -128,6 +128,7 @@ protected:
 	int	chksum;		// Checksum value.
 	int	start;		// Start of transmission.
 	int	endfile;	// The end of the file has been reached.
+	int	numblocks;	// Number of blocks successfully transferred.
 
 	// Do some processing for the current state.  If
 	// "ch" is -1, then a timeout has occurred.

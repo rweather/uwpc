@@ -20,6 +20,18 @@
 	transfers, etc.  (beta-release)
 2.01	Added clipboard routines.
 2.02	Get deeply into the Windows 3.0 port.  Add international support.
+	Fixes: enable swapping BS and DEL, but do not affect CTRL-H; shorten
+	the terminal bell; VT52 wrapping; non-destructive tabs; many fixes
+	to the terminal emulations; system time in status line.
+	Enhancements: 43/50 line mode; some protocol 2; %r in status line;
+	total overhaul to the ANSI emulation to make it more like VT100;
+	FOSSIL driver support, lots more Protocol 2 support, to handle
+	different sized windows, dialing directory.
+2.03	Add ANSI cursor keys to the ADM31 terminal emulation and fix a bug
+	in the key table handling code.  Fix a bug with ALT-N that was stopping
+	VT100 and VT102 windows from being created.  Add "direct" and "baudest"
+	options.  Fix line deletion in the Windows 3.0 version.  Make "swapbs"
+	work in the Windows 3.0 version.
 
 			History of TERMCC Versions
 			==========================
@@ -29,4 +41,12 @@
 1.01	Additions to help support ANSI emulation and a clean-up of
 	the command-line syntax - released with UW/PC 2.00.
 1.02	Add support for secondary key tables, and some extra things for
-	use in the VT100 terminal emulation.  Released with UW/PC 2.02.
+	use in the VT100 terminal emulation.
+1.03	Implement TCAP2CAP to convert raw TERMCAP entries into .CAP files.
+	Add many other new instructions to make the TERMCC code more efficient.
+1.04	Alignment test.
+
+			History of UWINSTAL Versions
+			============================
+
+1.00	Initial version written in parallel to and released with UW/PC 2.02.

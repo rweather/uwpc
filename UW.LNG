@@ -6,7 +6,7 @@
 # as long as this message and the above Copyright message remain, and you
 # do not charge any money for this file.  If you develop tables for any
 # other languages, then please forward them to me at "rhys@cs.uq.oz.au" so
-# they can be included in future versions of UW/PC.  See the file UW.DOC
+# they can be included in future versions of UW/PC.  See the file UW.TXT
 # in the UW/PC distribution for a description of the format of these tables.
 #
 scandinavian,scand,finnish
@@ -16,3 +16,6 @@ scandinavian,scand,finnish
 	153 = '\'
 	142 = '['
 	143 = ']'
+#
+ukascii,english,british
+	156 < '#'

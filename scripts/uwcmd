@@ -1,0 +1,143 @@
+#!/bin/sh
+#
+# uwcmd - A script to run a command in a UW window.
+#
+# Usage: uwcmd [-h] [-0] [-ttitle] [-n] [-s] [-wtermtype] [-blines] [-]
+#			[cmd [arg ...]]
+#    Or: uwcmd -ccmd [-h] [-0] [-ttitle] [-n] [-s] [-wtermtype] [-blines] [-]
+#			[arg ...]
+#
+#	-ccmd	Specify the command-name at the front of the uwcmd command-line
+#		rather than at the end.
+#
+#	-h	Pass the "-h" (halt) option to "uwrun" to suspend execution
+#		waiting for a RETURN to be pressed after the command exits.
+#
+#	-0	If "-b" is not specified, set the number of scroll-back lines
+#		to zero.  Otherwise don't change the number of lines.
+#
+#	-n	Don't pop the window up to be the current window.
+#
+#	-ttitle	Specify a title for the window.
+#
+#	-s	Sleep for 5 seconds after command execution.  See "uwrun" for
+#		more information.
+#
+#	-wterm	Set the terminal type in the created window.  See "uwrun" for
+#		more information.
+#
+#	-blines	Set the number of scroll-back lines to be used in the window.
+#
+#	-	A separator that may be used between the uwcmd options and the
+#		command name and its options.
+#
+
+# Get the command to be run if it is present.
+case $1 in
+  -c*)	UWCMD=`expr substr "$1" 3 100`
+  	shift;;
+    *)	UWCMD=;;
+esac
+
+# Determine if uwrun should halt after the command exits.
+case $1 in
+  -h)	UWHALT=-h
+  	shift;;
+   *)	UWHALT=;;
+esac
+
+# Get the default number of scroll-back buffer lines.
+case $1 in
+  -0)	UWSCROLL=-b0
+  	shift;;
+   *)	UWSCROLL=;;
+esac
+
+# Get the title to be displayed on the window.
+# If there is an empty argument here then skip
+# it because it may be a blank title specification
+# from one of the front-end scripts.
+case $1 in
+   "")	if [ $# -gt 1 ]; then
+	  shift
+	fi;;
+  -t*)	UWTITLE="$1"
+  	shift;;
+    *)	UWTITLE=;;
+esac
+
+# Determine if we should pop the window up to the top on creation.
+case $1 in
+  -n)	UWPOPUP=
+  	shift;;
+   *)	UWPOPUP=-p;;
+esac
+
+# Determine if we should sleep after execution or not.
+case $1 in
+  -s)	UWSLEEP=-s
+  	shift;;
+   *)	UWSLEEP=;;
+esac
+
+# Get the default terminal types to be used.
+case $1 in
+  -wvtansi) TERMTYPE=-wansi
+	    UWRUNTYPE="$1"
+	    shift;;
+  -w*) 	    TERMTYPE="$1"
+       	    UWRUNTYPE="$1"
+       	    shift;;
+    *)	    if [ -n "$UWTERM" ]; then
+	      case "$UWTERM" in
+	        vtansi) TERMTYPE=-wansi
+		        UWRUNTYPE=-wvtansi;;
+		     *) TERMTYPE=-w"$UWTERM"
+		        UWRUNTYPE=-w"$UWTERM";;
+	      esac
+	    else
+	      TERMTYPE=
+	      UWRUNTYPE=
+	    fi ;;
+esac
+
+# Get the number of scroll-back lines to be used.
+case $1 in
+  -b*)	UWSCROLL="$1"
+  	shift;;
+    *)	;;
+esac
+
+# Skip the "-" separator if necessary.
+if [ "$1" = "-" ]; then
+  shift
+fi
+
+# Set a default title if necessary.
+if [ -z "$UWTITLE" ]; then
+  case "$UWCMD" in
+    "sh -c "*) UWCMDNAME=`expr substr "$UWCMD" 7 100`;;
+            *) UWCMDNAME="$UWCMD" ;;
+  esac
+  if [ -z "$1" ]; then
+    if [ -z "$UWCMDNAME" ]; then
+      UWTITLE="-t$SHELL"
+    else
+      UWTITLE="-t$UWCMDNAME"
+    fi
+  else
+    if [ -z "$UWCMDNAME" ]; then
+      UWTITLE="-t$*"
+    else
+      UWTITLE="-t$UWCMDNAME $*"
+    fi
+  fi
+fi
+
+# Now run uwtool/uwrun to start up the requested command.
+# Or ... just run the command directly if uw isn't active.
+if [ -n "$UW_ID" ]; then
+  uwtool $TERMTYPE "$UWTITLE" uwrun $UWSLEEP $UWRUNTYPE $UWSCROLL $UWPOPUP $UWHALT - $UWCMD $*
+else
+  exec uwrun $UWSLEEP $UWRUNTYPE $UWSCROLL $UWPOPUP $UWHALT - $UWCMD $*
+fi

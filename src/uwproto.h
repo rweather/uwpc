@@ -103,6 +103,8 @@
 #define	WONUM_LPREFIX	 (017<<3)	/* long encoding prefix */
 #define	WONUM_LENCODE(n) ((n)+' ')	/* long encoding function */
 #define	WONUM_LDECODE(c) (((c)&0177)-' ') /* long decoding function */
+#define	WONUM_USELONG(n) ((n)>WONUM_SHORT) /* test if long encode to be used */
+#define	WONUM_COMMAND(c) ((c)&07)	/* extract option command */
 
 /* Define the standard UW terminal types */
 
@@ -114,5 +116,6 @@
 #define	UWT_FTP		4	/* File transfer window */
 #define	UWT_PRINT	5	/* Output to printer */
 #define	UWT_PLOT	6	/* Plot window */
+#define	UWT_NOTUW	127	/* Code for type not supported by UW */
 
 #endif	/* __UWPROTO_H__ */

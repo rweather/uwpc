@@ -39,6 +39,11 @@
 // Use the Turbo C++ "delay" function under DOS //
 #define	DELAY_FUNC	delay
 
+// Define the far memory allocation routines //
+#include <alloc.h>
+#define	UWAlloc(size)	(farmalloc (size))
+#define UWFree(ptr)	(farfree (ptr))
+
 #else /* _Windows */
 
 // Define the declarations necessary for the Windows 3.0 version of UW/PC //
@@ -56,6 +61,10 @@ void	UWDelay	(unsigned ms);
 #define	TIMER_ELAPSED	250		// Elapsed time between timer events.
 #define	TIMER_FREQ	4		// Number of timer pulses per second.
 #define	TIMER_NUMBER	1		// Value attached to the timer.
+
+// Declare the far memory allocation routines for Windows //
+void far *UWAlloc (unsigned size);
+void	  UWFree  (void far *ptr);
 
 #endif /* _Windows */
 

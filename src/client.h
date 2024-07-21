@@ -76,12 +76,17 @@ protected:
 public:
 
 	int	isaterminal;		// Non-zero if a UWTermDesc type.
+	int	termtype;		// Type of terminal.
+	int	recvchars;		// Non-zero if characters received.
+	int	firstch;		// Non-zero to check first char.
 
 	// Create a client that is attached to a particular
 	// display window.
 	UWClient (UWDisplay *wind)
 		   { window = wind; underneath = 0;
-		     isaterminal = 0; capture = 0; };
+		     isaterminal = 0; capture = 0;
+		     termtype = 0; /* ADM31 */
+		     recvchars = 0; firstch = 0; };
 
 	// Get the display window for this client.
 	UWDisplay *getwind (void) { return (window); };
@@ -171,6 +176,7 @@ protected:
 	int	index;			// Index into argument array.
 	int	base;			// Base of array for extraction.
 	int	keytab;			// Secondary key table.
+	char	mapchars[256];		// Table to map printing chars.
 
 	// Jump to the currently stored location.
 	void	jump		(void);
@@ -179,10 +185,16 @@ protected:
 	// character request, starting with the given character.
 	void	interpret	(int ch);
 
+	// Reset the character mapping table to the default.
+	void	clrmap		(void);
+
+	// Change a character mapping in the table.
+	void	changemap	(int oldc,int newc) { mapchars[oldc] = newc; };
+
 public:
 
 	UWTermDesc (UWDisplay *wind) : UWTerminal (wind)
-		{ description = 0; isaterminal = 1; };
+		{ description = 0; isaterminal = 1; clrmap (); };
 
 	virtual	char	far *name (void) { if (description)
 					     return ((char far *)description);
@@ -206,6 +218,7 @@ extern "C" {
 extern	unsigned char far cdecl VT52_Driver;
 extern	unsigned char far cdecl ADM31_Driver;
 extern	unsigned char far cdecl ANSI_Driver;
+extern	unsigned char far cdecl VT100_Driver;
 
 }
 

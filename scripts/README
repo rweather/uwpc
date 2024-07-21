@@ -1,0 +1,7 @@
+This directory contains some useful scripts that I would use on my
+Unix machine to make working with UW/PC easier.  Put them somewhere
+on your path, together with "uwtool" from the server code.
+
+For example, to start an editor session in a new window:
+
+    uwvi file

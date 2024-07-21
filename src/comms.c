@@ -94,7 +94,7 @@ int	_Cdecl	comports[4] = {0x3F8,0x2F8,0x3E8,0x2E8};
 #define	MAX_INT_BUFSIZ	4096
 struct	IntBuf	{
 		  char	buffer[MAX_INT_BUFSIZ];
-		  int	input,output,size;
+		  int	input,output,bufsiz;
 		  int	statport,dataport;
 		  int	testbit;
 		  int	oldier,oldmcr,oldlcr,oldbaud;
@@ -159,12 +159,12 @@ int	port;
       		if (!Com1Buf.fossil)
       		  outportb (Com1Buf.dataport + COM_MCR,0x0B |
 			    Com1Buf.testbit);	/* Raise DTR */
-		return (Com1Buf.size);
+		return (Com1Buf.bufsiz);
       case 2: case 4:
       		if (!Com2Buf.fossil)
       		  outportb (Com2Buf.dataport + COM_MCR,0x0B |
 			    Com2Buf.testbit);	/* Raise DTR */
-		return (Com2Buf.size);
+		return (Com2Buf.bufsiz);
       default:	return 0;
     }
 }
@@ -177,13 +177,13 @@ int	port;
     {
       case 1: case 3:
       		disable ();	/* Disallow ints while flushing */
-		Com1Buf.size = 0;
+		Com1Buf.bufsiz = 0;
 		Com1Buf.output = Com1Buf.input;
 		enable ();
 		break;
       case 2: case 4:
       		disable ();	/* Disallow ints while flushing */
-		Com2Buf.size = 0;
+		Com2Buf.bufsiz = 0;
 		Com2Buf.output = Com2Buf.input;
 		enable ();
 		break;
@@ -202,7 +202,7 @@ int	port;
       case 1: case 3:
       		if (Com1Buf.fossil)
 		  {
-		    if (Com1Buf.size == 0)
+		    if (Com1Buf.bufsiz == 0)
 		      {
 		        /* Read some characters from the FOSSIL */
 		        _ES = FP_SEG((char far *)Com1Buf.buffer);
@@ -211,25 +211,25 @@ int	port;
 		        _CX = MAX_INT_BUFSIZ;
 		        _AH = FOS_BLK_READ;
 		        geninterrupt (FOSSIL_INT);
-			Com1Buf.size = _AX;
+			Com1Buf.bufsiz = _AX;
 			Com1Buf.output = 0;
 		      } /* if */
 		  } /* then */
 		 else
       		  outportb (Com1Buf.dataport + COM_MCR,0x0B |
 				Com1Buf.testbit);	/* Raise DTR */
-		if (Com1Buf.size == 0) return -1;
+		if (Com1Buf.bufsiz == 0) return -1;
 		else {
 			ch = Com1Buf.buffer[Com1Buf.output];
 			Com1Buf.output = (Com1Buf.output + 1) %
 				MAX_INT_BUFSIZ;
-			--Com1Buf.size;
+			--Com1Buf.bufsiz;
 			return (ch & 255);
 		}
       case 2: case 4:
       		if (Com2Buf.fossil)
 		  {
-		    if (Com2Buf.size == 0)
+		    if (Com2Buf.bufsiz == 0)
 		      {
 		        /* Read some characters from the FOSSIL */
 		        _ES = FP_SEG((char far *)Com2Buf.buffer);
@@ -238,19 +238,19 @@ int	port;
 		        _CX = MAX_INT_BUFSIZ;
 		        _AH = FOS_BLK_READ;
 		        geninterrupt (FOSSIL_INT);
-			Com2Buf.size = _AX;
+			Com2Buf.bufsiz = _AX;
 			Com2Buf.output = 0;
 		      } /* if */
 		  } /* then */
 		 else
       		  outportb (Com2Buf.dataport + COM_MCR,0x0B |
 				Com2Buf.testbit);	/* Raise DTR */
-		if (Com2Buf.size == 0) return -1;
+		if (Com2Buf.bufsiz == 0) return -1;
 		else {
 			ch = Com2Buf.buffer[Com2Buf.output];
 			Com2Buf.output = (Com2Buf.output + 1) %
 				MAX_INT_BUFSIZ;
-			--Com2Buf.size;
+			--Com2Buf.bufsiz;
 			return (ch & 255);
 		}
       default:	return (-1);
@@ -268,7 +268,7 @@ static void interrupt int_com1()
   asm jnz error;
   asm mov dx,Com1Buf.dataport;	/* Get the received character */
   asm in al,dx;
-  asm mov cx,Com1Buf.size;	/* Prepare to store the character */
+  asm mov cx,Com1Buf.bufsiz;	/* Prepare to store the character */
   asm cmp cx,MAX_INT_BUFSIZ;
   asm jae done;
   asm mov bx,Com1Buf.input;
@@ -276,7 +276,7 @@ static void interrupt int_com1()
   asm inc bx;			/* And advance buffer pointer */
   asm and bx,(MAX_INT_BUFSIZ - 1);
   asm mov Com1Buf.input,bx;
-  asm inc Com1Buf.size;
+  asm inc Com1Buf.bufsiz;
   asm jmp done;
  error:
   asm mov dx,Com1Buf.dataport;	/* Remove the erroneous character */
@@ -305,7 +305,7 @@ static void interrupt int_com2()
   asm jnz error;
   asm mov dx,Com2Buf.dataport;	/* Get the received character */
   asm in al,dx;
-  asm mov cx,Com2Buf.size;	/* Prepare to store the character */
+  asm mov cx,Com2Buf.bufsiz;	/* Prepare to store the character */
   asm cmp cx,MAX_INT_BUFSIZ;
   asm jae done;
   asm mov bx,Com2Buf.input;
@@ -313,7 +313,7 @@ static void interrupt int_com2()
   asm inc bx;			/* And advance buffer pointer */
   asm and bx,(MAX_INT_BUFSIZ - 1);
   asm mov Com2Buf.input,bx;
-  asm inc Com2Buf.size;
+  asm inc Com2Buf.bufsiz;
   asm jmp done;
  error:
   asm mov dx,Com2Buf.dataport;	/* Remove the erroneous character */
@@ -387,7 +387,7 @@ int	port,flags;
       		/* Initialise buffers for COM1 */
 		Com1Buf.input = 0;
 		Com1Buf.output = 0;
-		Com1Buf.size = 0;
+		Com1Buf.bufsiz = 0;
 		dataport = comports[port - 1];
 		Com1Buf.dataport = dataport;
 		Com1Buf.statport = Com1Buf.dataport + COM_STAT;
@@ -419,7 +419,7 @@ int	port,flags;
       		/* Initialise buffers for COM2 */
 		Com2Buf.input = 0;
 		Com2Buf.output = 0;
-		Com2Buf.size = 0;
+		Com2Buf.bufsiz = 0;
 		dataport = comports[port - 1];
 		Com2Buf.dataport = dataport;
 		Com2Buf.statport = Com2Buf.dataport + COM_STAT;
