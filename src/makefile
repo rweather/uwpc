@@ -31,12 +31,12 @@ ascii.obj:	ascii.h uw.h uwlib.h term.h
 setmode.com:	setmode.scr
 		debug <setmode.scr
 
-# Create the backup ZIP file UWPC103B.ZIP
+# Create the backup ZIP file UWPC104B.ZIP
 backup:
-		-pkzip -u uwpc103b.zip *.c *.h uw.doc uw.cfg uweg.cfg \
+		-pkzip -u uwpc104b.zip *.c *.h uw.doc uw.cfg uweg.cfg \
 			setmode.scr makefile history
 
-# Create the distribution ZIP file UWPC103.ZIP
+# Create the distribution ZIP file UWPC104.ZIP
 dist:		uw.exe setmode.com
 		mkdir dist
 		-tdstrip uw.exe
@@ -49,8 +49,8 @@ dist:		uw.exe setmode.com
 		del dist\uw-src.zip
 		-pkzip -a dist\uw-src.zip *.c *.h setmode.scr makefile
 		copy uwserver.tar dist
-		del uwpc103.zip
-		-pkzip -a uwpc103.zip dist\*.*
+		del uwpc104.zip
+		-pkzip -a uwpc104.zip dist\*.*
 
 # Clean up all .OBJ files from this directory
 clean:

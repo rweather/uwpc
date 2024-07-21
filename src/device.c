@@ -27,6 +27,8 @@
      1.0    14/12/90  RW  Original Version of DEVICE.C
      1.1    26/01/91  RW  Add "uw" configuration handling.
      1.2    17/03/91  RW  Add "FixComDevice" for serial port fixups.
+     1.3    21/03/91  RW  Add high bit stripping in Protocol 0 and
+     			  support for swapping the BS and DEL keys.
 
 -------------------------------------------------------------------------*/
 
@@ -53,6 +55,10 @@ int	_Cdecl	ModemCInit=1;
 char	_Cdecl	ModemHang[MODEM_STR_SIZE + 1] = "~~~+++~~~ATH0^M";
 char	_Cdecl	ModemDial[MODEM_STR_SIZE + 1] = "ATDT";
 char	_Cdecl	UWCommandString[MODEM_STR_SIZE + 1] = "uw^M";
+
+/* Define some other sundry flags */
+int	_Cdecl	StripHighBit=0;
+int	_Cdecl	SwapBackSpaces=0;
 
 /* Get the string representation of the communications parameters */
 static	void	_Cdecl	GetStringParams (void)

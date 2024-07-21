@@ -26,6 +26,7 @@
    -------  --------  --  --------------------------------------
      1.0    28/12/90  RW  Original Version of CONFIG.C
      1.1    01/01/90  RW  Clean up and remove __PROTO__
+     1.2    21/03/91  RW  Add high bit stripping in Protocol 0.
 
 -------------------------------------------------------------------------*/
 
@@ -295,6 +296,24 @@ static	int	_Cdecl	ConfigCommand (int ch)
 	AllowBeep = 1;
        else if (!stricmp (Buffer,"off"))
 	AllowBeep = 0;
+       else
+	ConfigError ("Illegal value: must be \"on\" or \"off\"");
+    } /* then */
+   else if (!stricmp (command,"strip") && type == 2)
+    {
+      if (!stricmp (Buffer,"on"))
+	StripHighBit = 1;
+       else if (!stricmp (Buffer,"off"))
+	StripHighBit = 0;
+       else
+	ConfigError ("Illegal value: must be \"on\" or \"off\"");
+    } /* then */
+   else if (!stricmp (command,"swapbs") && type == 2)
+    {
+      if (!stricmp (Buffer,"on"))
+	SwapBackSpaces = 1;
+       else if (!stricmp (Buffer,"off"))
+	SwapBackSpaces = 0;
        else
 	ConfigError ("Illegal value: must be \"on\" or \"off\"");
     } /* then */

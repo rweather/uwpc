@@ -1,4 +1,4 @@
-			    UW/PC Version 1.02
+			    UW/PC Version 1.04
 
 			     Rhys Weatherley
 
@@ -6,7 +6,7 @@
 
 1. INTRODUCTION
 
-This is version 1.02 of UW/PC, a multiple-window interface to UNIX for
+This is version 1.04 of UW/PC, a multiple-window interface to UNIX for
 IBM-PC's and compatible computers.  This program is based on a program
 written for the Macintosh by John Bruner.  It provides up to seven
 separate login sessions on the remote UNIX machine, and requires the
@@ -23,8 +23,8 @@ can be found in the directory "info-mac/unix" on "ditmela.mel.dit.csiro.au"
 [128.250.90.81].  A copy of the server source code without the Macintosh
 program binaries is included in this release.
 
-Version 1.02 is the first public release, and comments are invited to the
-author.  It implements the Unix Windows protocols 0 and 1.  Protocol 2 (with
+Version 1.04 is a bug fix release, and comments are invited to the author.
+It implements the Unix Windows protocols 0 and 1.  Protocol 2 (with
 more control over window management) was not implemented because of the nature
 of the IBM-PC's display technology.  A Windows 3.0 version is a possible
 future project, but was not tackled initially because of time and resource
@@ -34,7 +34,9 @@ UW/PC is distributed under the terms of the GNU General Public License
 (version 1), a copy of which is included.  Note however that the server
 is NOT covered under this license and comes under the terms and conditions
 contained within its documentation.  Also, please note that I am not
-affiliated with the Free Software Foundation in any way.
+affiliated with the Free Software Foundation in any way, and that further
+releases of this program may not have source code included or be distributed
+under the GNU General Public License.
 
 Comments about UW/PC can be sent to the author (me) at the e-mail
 address rhys.weatherley@gmail.com.
@@ -272,13 +274,24 @@ optional, and their defaults follow:
 		server, they are practically useless to stop and start
 		the display.  By setting this variable to "direct", the
 		terminal server will receive the XON and XOFF characters,
-		giving better control over scrolling displays.  It can be
-		either direct or encoded.
+		giving better control over scrolling displays.
 
 	beep (default on)
 
 		Enable or disable the terminal beep.  This can be either
 		on or off.
+
+	strip (default off)
+
+		Enable or disable the stripping of the most significant
+		bit of received characters.  This can be either on or off.
+		This is provided to strip unwanted parities on some systems.
+
+	swapbs (default off)
+
+		Enable or disable the swapping of the backspace and delete
+		keys.  Some people like to have this swap in place.  This
+		can be either on or off.
 
 	dial (default "ATDT")
 
@@ -341,8 +354,9 @@ very small, very few problems should result on reasonably clean modem
 connections.  As a last resort, you can press ALT-E to return to protocol
 0, and if the UW server hasn't exited (because the exit command was
 corrupted), you can press (while in protocol 0, not protocol 1) "CTRL-A"
-followed by the "Delete" key, which corresponds to the UW exit command,
-which should abort the UW server.
+followed by the "Delete" key (or the backspace key if the "swapbs"
+configuration option is to to "on"), which corresponds to the UW exit
+command, which should abort the UW server.
 
 7. FUTURE WORK
 

@@ -65,7 +65,7 @@ int	_Cdecl	main (int argc,char *argv[])
     AbortProgram ("Cannot initialise COM port");
   InitUWProtocol (Def0TermType);
   InitKeyboard ();
-  OutputString ("UW/PC version 1.03, Copyright (C) 1990-1991 Rhys Weatherley\r\n");
+  OutputString ("UW/PC version 1.04, Copyright (C) 1990-1991 Rhys Weatherley\r\n");
   OutputString ("UW/PC comes with ABSOLUTELY NO WARRANTY; see the file COPYING for details.\r\n");
   OutputString ("This is free software, and you are welcome to redistribute it\r\n");
   OutputString ("under certain conditions; see the file COPYING for details.\r\n\r\n");
@@ -94,6 +94,14 @@ static	void	_Cdecl	HandleTerminal (void)
     {
       UWTick ();		/* Do some Unix Windows processing */
       key = GetKeyPress ();	/* Get the user's keypress and decode */
+      if (SwapBackSpaces)
+        {
+	  /* Swap the BS and DEL key usage values if required */
+	  if (key == 8)
+	    key = 0x7F;
+	   else if (key == 0x7F)
+	    key = 8;
+	} /* if */
       if (XonXoffDirect && (key == 021 || key == 023))
 	WriteComDevice (key);	/* Send XON and XOFF direct if nec */
        else if (key >= 0 && key <= 255 && key != '\033')

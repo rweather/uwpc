@@ -30,6 +30,7 @@
 			   the DTR signal.
       1.2    17/11/90  RW  Add 'leavedtr' parameter to "comrestore".
       1.3    17/03/91  RW  Create 'comfix' to fix DOS shell-out bug.
+      1.4    21/03/91  RW  Fix minor problem with sign extension in comreceive.
 
 -----------------------------------------------------------------------------*/
 
@@ -166,7 +167,7 @@ int	port;
 			Com1Buf.output = (Com1Buf.output + 1) %
 				MAX_INT_BUFSIZ;
 			--Com1Buf.size;
-			return ch;
+			return (ch & 255);
 		}
       case 2:	outportb (Com2Buf.dataport + COM_MCR,0x0B |
 				Com2Buf.testbit);	/* Raise DTR */
@@ -176,7 +177,7 @@ int	port;
 			Com2Buf.output = (Com2Buf.output + 1) %
 				MAX_INT_BUFSIZ;
 			--Com2Buf.size;
-			return ch;
+			return (ch & 255);
 		}
       default:	return (-1);
     }

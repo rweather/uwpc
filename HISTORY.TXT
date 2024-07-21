@@ -5,3 +5,7 @@
 1.01	Bug fixes and clean up phase - Not released.
 1.02	ASCII file transfers added - First public release.
 1.03	Small bug fix in the DOS shell-out.
+1.04	Lots of small things done for the first SIMTEL20 release:
+	(a) Add a "strip high bit" configuration option.
+	(b) Fix a small communications bug with sign extension.
+	(c) Add a "swap bs/del" configuration option.

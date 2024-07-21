@@ -30,6 +30,7 @@
 			   the DTR signal.
       1.2    17/11/90  RW  Add 'leavedtr' parameter to "comrestore".
       1.3    17/03/91  RW  Create 'comfix' to fix DOS shell-out bug.
+      1.4    21/03/91  RW  Fix minor problem with sign extension in comreceive.
 
 -----------------------------------------------------------------------------*/
 

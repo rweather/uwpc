@@ -28,6 +28,8 @@
      1.1    01/01/91  RW  Clean up and remove __PROTO__
      1.2    26/01/91  RW  Add "uw" configuration handling.
      1.3    17/03/91  RW  Add "FixComDevice" for serial port fixups.
+     1.4    21/03/91  RW  Add high bit stripping in Protocol 0 and
+     			  support for swapping the BS and DEL keys.
 
 -------------------------------------------------------------------------*/
 
@@ -63,6 +65,10 @@ extern	int	_Cdecl	ModemCInit;
 extern	char	_Cdecl	ModemHang[];
 extern	char	_Cdecl	ModemDial[];
 extern	char	_Cdecl	UWCommandString[];
+
+/* Define some sundry flags */
+extern	int	_Cdecl	StripHighBit;
+extern	int	_Cdecl	SwapBackSpaces;
 
 /* Initialise the communications device - returns non-zero if OK */
 int	_Cdecl	InitComDevice	(void);

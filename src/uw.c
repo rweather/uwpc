@@ -26,6 +26,8 @@
    -------  --------  --  --------------------------------------
      1.0    15/12/90  RW  Original Version of UW.C
      1.1    01/01/91  RW  Clean up and remove __PROTO__
+     1.2    21/03/91  RW  Add high bit stripping in Protocol 0 and
+     			  fix the ^A/^S/^Q bug.
 
 -------------------------------------------------------------------------*/
 
@@ -89,9 +91,9 @@ static	void	_Cdecl	UWToServer (int window,int ch)
     } /* if */
   switch (ch)
     {
-      case IAC:  UWCommand (P1_FN_META | P1_CC_IAC); break;
-      case XON:  UWCommand (P1_FN_META | P1_CC_XON); break;
-      case XOFF: UWCommand (P1_FN_META | P1_CC_XOFF); break;
+      case IAC:  UWCommand (P1_FN_CTLCH | P1_CC_IAC); break;
+      case XON:  UWCommand (P1_FN_CTLCH | P1_CC_XON); break;
+      case XOFF: UWCommand (P1_FN_CTLCH | P1_CC_XOFF); break;
       default:	 WriteComDevice (ch); break;
     } /* switch */
 } /* UWToServer */
@@ -285,14 +287,16 @@ void	_Cdecl	UWTick (void)
   /* Get any input characters and process the UW protocol */
   if ((ch = ReadComDevice ()) < 0)
     return;			/* No input characters ready */
-  if (UWProtocol > 0)
-    ch &= 0x7F;			/* Strip high bit in protocol 1 */
+  if (UWProtocol > 0 || StripHighBit)
+    ch &= 0x7F;			/* Strip high bit from the character */
   if (ch == P1_IAC && !GotIAC)
     GotIAC = 1;			/* Record that IAC was received */
    else if (GotIAC)
     {
       int arg,count;
       GotIAC = 0;		/* Reset IAC flag */
+      if ((ch & P1_DIR) != P1_DIR_HTOC)
+        return;			/* Echoed UW command - ignore */
       arg = ch & P1_FN_ARG;	/* Get the argument of the function */
       /* Determine the function to be performed */
       switch (ch & P1_FN)
