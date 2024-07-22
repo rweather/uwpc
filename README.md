@@ -3,18 +3,18 @@ UW/PC - Unix Windows for PC
 
 This is a historical project of mine from the early 1990's called UW/PC.
 
-UW/PC was a multiple-window interface to UNIX for IBM-PC's and compatible
+UW/PC was a multiple-window interface to Unix for IBM-PC's and compatible
 computers.  It was structured as a terminal program that could be used to
 dial up to the Unix machine via a modem.
 
 After connecting, you would start the "uw" server on the Unix side of the
 connection.  This server could create up to seven virtual sessions over
-the dial-up serial link, with special escape sequences to switch between
+the dial-up serial link, with special control sequences to switch between
 sessions.
 
-If a program in one session is printing data, the escape sequences switch the
+If a program in one session is printing data, the control sequences switch the
 client to write to that window's buffer.  Similarly, if the user types in a
-window, then escape sequences are sent to switch back to that session on the
+window, then control sequences are sent to switch back to that session on the
 server side to deliver the keystrokes to the correct pty on the Unix side.
 UW/PC uses ALT+1, ALT+2, etc to switch between windows.
 
@@ -30,10 +30,6 @@ client for Windows 3.0.
 The Linux "screen" utility provides similar functionality these days,
 but the Unix Windows protocol was fairly unique in the late 1980's and
 early 1990's.
-
-The UW/PC project started in December 1990 and continued until mid-1992
-when I got distracted by other things, namely my "Helldiver" e-mail and
-USENET reader.  And then I got a real job and that was that.
 
 See [UW.TXT](UW.TXT) for the historical documentation.
 
@@ -64,10 +60,10 @@ provided for each major version I was able to recover from my archives:
 
 * 1.00 (no source code found, only executables)
 * 1.01
-* 1.02
+* 1.02 (first public release)
 * 1.03
 * 1.04
-* 1.05 (not found)
+* 1.05 (not found, probably never released due to the rewrite in 2.00)
 * 2.00 (total rewrite in C++)
 * 2.01
 * 2.02 (started the Windows 3.0 port)
@@ -77,10 +73,10 @@ The Windows front end is not yet checked in, only the MS-DOS front end.
 
 The original MS-DOS code was designed to be built with Turbo C++ and
 Turbo Assembler.  I switched to Borland C++ for the later Windows version.
-You will need that or something similar if you want to build it.  I was able to
-successfully build the MS-DOS version with [DOSBox](https://www.dosbox.com/)
-after installing Turbo C++ 1.01 and Turbo Assembler 4.0 into the
-DOSBox environment.
+You will need Turbo C++ or something similar if you want to build it.
+I was able to successfully build the MS-DOS version with
+[DOSBox](https://www.dosbox.com/) after installing Turbo C++ 1.01 and
+Turbo Assembler 4.0 into the DOSBox environment.
 
 John Bruner's original server code was designed to be built on mid-1980's
 BSD 4.3 systems and is written in K&R C.  It would need a lot of work to
@@ -120,6 +116,39 @@ John Bruner's server code is distributed under the following license:
     Copyright 1985,1986 by John D. Bruner.  All rights reserved.  Permission to
     copy this program is given provided that the copy is not sold and that
     this copyright notice is included.
+
+Future Work
+-----------
+
+The UW/PC project started in December 1990 and continued until mid-1992.
+
+I had grand plans, some of which are documented at the end of
+[UW.TXT](UW.TXT) and [src/readme](src/readme).  Windows support with
+multiple floating windows in variable sizes, TEK4010 graphics support,
+integrated FTP-style file transfer, NNTP clients, scroll-back buffers,
+protocol 2 for advanced window control, and much more.  Bits and pieces
+of these were already in progress.
+
+However, the dial-up dumb terminal era was coming to a close and TCP/IP was
+about to consume everything.  I also got distracted by other things,
+namely my "Helldiver" e-mail client and USENET reader.  And then I got a
+real job in 1995, working in Silicon Valley during the Dotcom era.
+And that was the end of that.
+
+So what does the future of UW/PC hold now?  Here are some ideas:
+
+* Rewrite the "uw" server from scratch.  The BSD 4.3 server code is very
+  old and crufty and modern ANSI C compilers do not like it one bit.
+* Port the client to Linux, with the UI in curses or Qt.
+* Figure out how to run a Unix Windows session over ssh instead of serial,
+  which may create a very nice text-based windowing environment for
+  remote machine access.
+* Support modern terminal types like "xterm" in place of the older
+  "adm31", "vt52", and "ansi" types from the original Unix Windows protocol.
+* Consider using something like [libtsm](https://www.freedesktop.org/wiki/Software/libtsm/)
+  to handle the complexity of modern terminal emulation.
+* Add online configuration, so that manual editing of "UW.CFG" is no
+  longer required.
 
 Contact
 -------
